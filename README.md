@@ -17,6 +17,9 @@ Keyboard: A / D move, W jump, J punch, K kick, L strong attack, I special, hold 
 
 Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y strong attack, RB special, hold RT block, Menu/Start or A restart (winner screen only). Press any button once if the browser doesn't detect the pad right away.
 
+Touch (phones/tablets, shown only on touch devices, best in landscape): hold the left/right pad to move,
+JUMP, P (punch), K (kick), STR (strong), hold BLK (block), SP (special). Tap RESTART on the winner screen.
+
 ## Project layout
 
 - `src/config/characters.js` - **character configuration**: stats, moves, specials, appearance (see Characters below)
@@ -33,7 +36,8 @@ Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y st
 - `src/ai/AIController.js` - opponent AI
 - `src/input/KeyboardController.js` - key bindings
 - `src/input/GamepadController.js` - gamepad bindings (Gamepad API, deadzone, press detection)
-- `src/input/CombinedController.js` - merges keyboard + gamepad into one player input
+- `src/input/TouchController.js` - on-screen touch buttons (touch devices only)
+- `src/input/CombinedController.js` - merges keyboard + gamepad + touch into one player input
 - `src/core/Game.js` - loop (fixed 60 steps/s), round flow, hitstop, effects/sound hooks
 - `src/camera`, `src/arena`, `src/ui`, `src/fx`, `src/audio` - camera, stage, HUD, hit sparks, generated sound effects (`src/audio/Sfx.js`)
 

@@ -8,6 +8,7 @@ import { resolveHits, resolvePush } from '../combat/CombatSystem.js';
 import { KeyboardController } from '../input/KeyboardController.js';
 import { GamepadController } from '../input/GamepadController.js';
 import { CombinedController } from '../input/CombinedController.js';
+import { TouchController, isTouchDevice } from '../input/TouchController.js';
 import { AIController } from '../ai/AIController.js';
 import { createArena } from '../arena/Arena.js';
 import { FightCamera } from '../camera/FightCamera.js';
@@ -48,7 +49,9 @@ export class Game {
     this.shields = this.fighters.map((f) => new BlockShield(this.scene, f));
     this.playerIndicator = new PlayerIndicator(this.scene, this.p1); // player only, not the AI
     // Player 1 = keyboard + first gamepad, merged into one input.
-    const player1 = new CombinedController([new KeyboardController(), new GamepadController()]);
+    // Touch buttons are only added on touch devices.
+    this.touch = isTouchDevice() ? new TouchController() : null;
+    const player1 = new CombinedController([new KeyboardController(), new GamepadController(), ...(this.touch ? [this.touch] : [])]);
     this.controllers = [player1, new AIController({ aggression: 0.7 })];
     this.hud.setNames(this.p1.name, this.p2.name);
 
@@ -190,8 +193,9 @@ export class Game {
     this.debug.update(this.fighters);
     this.fighters.forEach((f, i) => {
       this.hud.setStamina(i, f.stamina, f.guardBroken);
-      this.hud.setSpecial(i, f.specials.status(), i === 0 ? 'I / RB' : '');
+      this.hud.setSpecial(i, f.specials.status(), i === 0 ? (this.touch ? 'SP' : 'I / RB') : '');
     });
+    this.touch?.setSpecialReady(this.p1.specials.full);
     this.renderer.render(this.scene, this.cam.camera);
   }
 }
