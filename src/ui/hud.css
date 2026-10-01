@@ -29,11 +29,16 @@ canvas { display: block; }
   color: rgba(255, 255, 255, 0.65); }
 
 /* Stamina meter (under each health bar): fills as it recharges, glows when the special is ready */
-.meter { position: relative; height: 10px; margin-top: 6px; width: 60%; background: #10162a; border: 2px solid #cfd6e6;
+.meter { position: relative; height: 12px; margin-top: 6px; width: 60%; background: #10162a; border: 2px solid #cfd6e6;
   box-shadow: 0 0 0 2px #000; overflow: hidden; }
 .p2 .meter { margin-left: auto; }
 .meter-fill { position: absolute; top: 0; bottom: 0; left: 0; background: linear-gradient(#5aa9ff, #2a5fd0); }
 .p2 .meter-fill { left: auto; right: 0; }
+.meter-lag { position: absolute; top: 0; bottom: 0; left: 0; background: #fff; }
+.p2 .meter-lag { left: auto; right: 0; }
+.meter-lag.draining { transition: width 0.5s ease-in 0.35s; }
+.meter.spent { animation: meter-spent 0.4s ease-out; }
+@keyframes meter-spent { 0% { box-shadow: 0 0 0 2px #000, 0 0 14px #fff; } 100% { box-shadow: 0 0 0 2px #000; } }
 .meter-cost { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; display: none; }
 .meter.ready { border-color: #9ff3ff; animation: meter-pulse 0.9s ease-in-out infinite; }
 .meter.ready .meter-fill { background: linear-gradient(#b8f6ff, #36c8ff); }

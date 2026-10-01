@@ -27,7 +27,8 @@ Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y st
 - `src/models/createModel.js` - builds a fighter's model from its `appearance`
 - `src/models/PlaceholderModel.js` - primitive humanoid + the model interface description
 - `src/models/GltfModel.js` - ready-made adapter for your own `.glb` characters with animations
-- `src/abilities/SpecialAbilities.js` - special ability stamina + cooldowns (`stamina: { max, regenPerSecond }`, `staminaCost`, `cooldown` are set per character in `characters.js`)
+- `src/abilities/specials.js` - **the special ability**, defined once and shared by player and AI (cost, cooldown, frame data)
+- `src/abilities/SpecialAbilities.js` - stamina + cooldown rules (the only place stamina changes; the HUD reads it directly)
 - `src/ai/AIController.js` - opponent AI
 - `src/input/KeyboardController.js` - key bindings
 - `src/input/GamepadController.js` - gamepad bindings (Gamepad API, deadzone, press detection)
@@ -39,8 +40,8 @@ Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y st
 
 All fighters are data in **`src/config/characters.js`**. `defineFighter({...})` deep-merges your values over
 `BASE_FIGHTER`, so a new fighter only lists what's different: name, health, walk speed, jump height,
-damage multiplier, attack speed, stamina, special ability (damage, stamina cost, cooldown, frame data)
-and `appearance` (model file, colors, face, accessories). A copy-paste template is at the bottom of the file.
+damage multiplier, attack speed, stamina and
+ `appearance` (model file, colors, face, accessories). A copy-paste template is at the bottom of the file.
 Pick who fights in `src/core/Game.js`.
 
 - Model: put a rigged humanoid `.glb` (Mixamo-style bone names, T-pose is fine) in `public/models/` and set

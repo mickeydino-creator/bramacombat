@@ -198,7 +198,7 @@ export class AIController {
     if (dist > reach * 0.9 || opponent.y > 0.6) return false; // out of range or high in the air
     if (opponent.blocking || opponent.state === 'blockstun') return Math.random() < 0.1; // would be blocked
     // If the player is mid-attack, only go for it when their recovery outlasts our startup.
-    if (opponent.state === 'attack' && this.framesLeft(opponent) < self.frames(move.startup)) return false;
+    if (opponent.state === 'attack' && this.framesLeft(opponent) < self.moveFrames(move, move.startup)) return false;
     return true;
   }
 

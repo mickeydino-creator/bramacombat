@@ -76,6 +76,8 @@ export class Fighter {
 
   /** Frame data scaled by the character's attack speed. */
   frames(n) { return Math.max(1, Math.round(n / this.def.attackSpeed)); }
+  /** Frame count for a specific move: shared specials (`fixed`) ignore attack speed. */
+  moveFrames(move, n) { return move.fixed ? n : this.frames(n); }
 
   /** Called once per fixed step (60/s). */
   update(input, opponent) {
@@ -163,18 +165,18 @@ export class Fighter {
 
   tryAttack(name) {
     const special = this.specials.has(name);
-    if (special && !this.specials.isReady(name)) return false;
     const move = special ? this.specials.getMove(name) : this.def.moves[name];
     if (!move || (this.cooldowns[name] || 0) > 0) return false;
-    if (special) this.specials.trigger(name); // cooldown starts on activation
+    // Specials: stamina is spent and the cooldown starts right here, or the attack doesn't happen.
+    if (special && !this.specials.trigger(name)) return false;
     this.attack = {
       name,
       move,
       frame: 0,
       hasHit: false, // one attack can only hit once
-      startup: this.frames(move.startup),
-      active: this.frames(move.active),
-      recovery: this.frames(move.recovery),
+      startup: this.moveFrames(move, move.startup),
+      active: this.moveFrames(move, move.active),
+      recovery: this.moveFrames(move, move.recovery),
     };
     if (this.grounded) this.vx = 0;
     this.setState('attack');
@@ -194,7 +196,7 @@ export class Fighter {
   }
 
   endAttack() {
-    this.cooldowns[this.attack.name] = this.frames(this.attack.move.cooldown || 0);
+    this.cooldowns[this.attack.name] = this.moveFrames(this.attack.move, this.attack.move.cooldown || 0);
     this.attack = null;
     this.setState(this.grounded ? 'idle' : 'air');
   }
@@ -264,7 +266,7 @@ export class Fighter {
     const fromFront = Math.sign(attacker.x - this.x) === this.facing;
     const blocked = this.blocking && fromFront;
     this.lastHitBlocked = blocked;
-    const raw = move.damage * attacker.def.damageMultiplier;
+    const raw = move.damage * (move.fixed ? 1 : attacker.def.damageMultiplier); // shared specials: same damage for everyone
     const damage = Math.round(blocked ? raw * BLOCK_DAMAGE_MULTIPLIER : raw);
     this.health = Math.max(0, this.health - damage);
 

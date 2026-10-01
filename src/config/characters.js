@@ -1,3 +1,5 @@
+import { DEFAULT_SPECIALS } from '../abilities/specials.js';
+
 /*
  * CHARACTER CONFIGURATION
  * =======================
@@ -14,7 +16,8 @@
  *   stamina           { max, regenPerSecond } - shared by special abilities AND blocking
  *   moves             normal attacks (frame data below); override single values with
  *                     moves: { punch: { damage: 7 } }
- *   specials          special abilities: { special: { label, staminaCost, cooldown, move: {...} } }
+ *   specials          special abilities. Everyone shares DEFAULT_SPECIALS (src/abilities/specials.js) so the
+ *                     player and AI have the exact same ability; define new ones there, not per fighter.
  *   appearance        the 3D model, see "APPEARANCE" below
  *
  * MOVE FRAME DATA (frames @ 60fps):
@@ -26,9 +29,8 @@
  *   lunge      forward speed when the attack becomes active;  shake: camera shake on hit
  *   anim       animation to play (punch, kick, strong, special, ...)
  *
- * SPECIALS: staminaCost is spent on activation (needs at least that much), cooldown is in
- * seconds and starts on activation. Bind new special action names in
- * src/input/KeyboardController.js and src/input/GamepadController.js.
+ * SPECIALS: defined once in src/abilities/specials.js (staminaCost, cooldown, frame data).
+ * Stamina/cooldown rules live in src/abilities/SpecialAbilities.js and apply equally to player and AI.
  *
  * APPEARANCE (src/models/createModel.js):
  *   type: 'stickman'  url, height, colors: { body, emissive }, face, accessories
@@ -80,9 +82,9 @@ export const BASE_FIGHTER = {
   jumpHeight: 2.2,
   damageMultiplier: 1.0,
   attackSpeed: 1.0,
-  stamina: { max: 100, regenPerSecond: 7 },
+  stamina: { max: 100, regenPerSecond: 6 }, // shared by everyone: 0 -> full in ~17s
   moves: BASE_MOVES,
-  specials: {},
+  specials: DEFAULT_SPECIALS, // same object for every fighter
   appearance: {
     type: 'stickman',
     url: '/models/stickman.glb',
@@ -110,23 +112,6 @@ export const CHARACTERS = {
     name: 'EMBER',
     walkSpeed: 4.2,
     jumpHeight: 2.3,
-    stamina: { max: 100, regenPerSecond: 7 }, // 0 -> full in ~14s
-    specials: {
-      special: {
-        label: 'FLAME RUSH',
-        staminaCost: 65,
-        cooldown: 10,
-        // Long dashing palm strike: big reach, punishable if blocked or whiffed.
-        move: {
-          anim: 'special',
-          startup: 12, active: 6, recovery: 26, cooldown: 0,
-          damage: 10,
-          hitbox: { x: 0.9, y: 1.2, w: 1.0, h: 0.8 },
-          knockback: { x: 5.5, y: 3 },
-          hitstun: 24, hitstop: 12, lunge: 9, shake: 0.3,
-        },
-      },
-    },
     appearance: {
       colors: { body: 0xc8401e, emissive: 0x2a0800 },
       face: { eyes: 0x111111, brows: true, mouth: 'grin' },
@@ -140,23 +125,6 @@ export const CHARACTERS = {
     jumpHeight: 2.1,
     damageMultiplier: 1.05,
     attackSpeed: 0.95,
-    stamina: { max: 100, regenPerSecond: 6 }, // 0 -> full in ~17s
-    specials: {
-      special: {
-        label: 'THUNDER KNEE',
-        staminaCost: 70,
-        cooldown: 12,
-        // Rising launcher: slower, pops the opponent up.
-        move: {
-          anim: 'special',
-          startup: 15, active: 6, recovery: 26, cooldown: 0,
-          damage: 11,
-          hitbox: { x: 1.0, y: 1.0, w: 1.1, h: 1.0 },
-          knockback: { x: 4, y: 6 },
-          hitstun: 28, hitstop: 12, lunge: 5, shake: 0.35,
-        },
-      },
-    },
     appearance: {
       colors: { body: 0x1f5fc8, emissive: 0x000a22 },
       face: { eyes: 0x0a0a0a, brows: true, mouth: 'frown' },
@@ -171,9 +139,8 @@ export const CHARACTERS = {
  *   shade: defineFighter({
  *     name: 'SHADE',
  *     maxHealth: 90, walkSpeed: 4.6, jumpHeight: 2.5, damageMultiplier: 0.95, attackSpeed: 1.1,
- *     stamina: { max: 100, regenPerSecond: 8 },
  *     moves: { kick: { damage: 10 } },
- *     specials: { special: { label: 'SHADOW STEP', staminaCost: 60, cooldown: 9, move: { ...BASE_MOVES.kick, anim: 'special', damage: 9, lunge: 8 } } },
+ *     // specials: shared by default; to change everyone's special, edit src/abilities/specials.js
  *     appearance: { url: '/models/stickman.glb', colors: { body: 0x333333 }, face: { texture: '/faces/shade.png' } },
  *   }),
  *

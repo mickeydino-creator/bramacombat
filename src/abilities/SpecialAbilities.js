@@ -1,19 +1,19 @@
 import { FPS } from '../config/constants.js';
 
 /*
- * Special abilities: stamina + cooldowns (one instance per fighter).
+ * Special abilities: stamina + cooldowns (one instance per fighter, same rules for player and AI).
  *
- * Defined per character in src/config/characters.js:
- *   stamina: { max: 100, regenPerSecond: 16 },
- *   specials: {
- *     special: { label: 'FLAME RUSH', staminaCost: 100, cooldown: 5, move: { ...frame data } },
- *   }
- * The key (`special`) is the action name the input sends (see KeyboardController / GamepadController).
- * Using an ability spends `staminaCost` immediately and starts its `cooldown` (seconds).
- * Stamina recharges continuously at `regenPerSecond`. An ability can only be used when
- * there is enough stamina AND it is off cooldown; otherwise presses are ignored completely.
+ * The abilities themselves are shared definitions (src/abilities/specials.js); fighters only
+ * reference them. This class is the ONLY place stamina changes:
+ *   - activation (trigger): spends staminaCost immediately, starts the cooldown, and pauses
+ *     regeneration for REGEN_DELAY_SECONDS so the drop is clearly visible
+ *   - blocking (spend): see Fighter.drainGuard
+ *   - regeneration (update): regenPerSecond, capped at max
+ * An ability is usable only with enough stamina AND off cooldown, and at most once per frame.
+ * The HUD reads `stamina` directly from here every frame (no separate UI value).
  */
-const DEFAULT_STAMINA = { max: 100, regenPerSecond: 16 };
+const DEFAULT_STAMINA = { max: 100, regenPerSecond: 6 };
+const REGEN_DELAY_SECONDS = 0.75;
 
 export class SpecialAbilities {
   constructor(defs = {}, stamina = DEFAULT_STAMINA) {
@@ -27,17 +27,30 @@ export class SpecialAbilities {
   reset() {
     for (const name in this.defs) this.remaining[name] = 0;
     this.stamina = this.maxStamina; // rounds start with a full meter
+    this.regenDelay = 0;
+    this.tick = 0;
+    this.lastTriggerTick = -1;
   }
 
   has(name) { return name in this.defs; }
   cost(name) { return this.defs[name]?.staminaCost ?? 0; }
-  isReady(name) { return this.has(name) && this.remaining[name] <= 0 && this.stamina >= this.cost(name); }
+  isReady(name) {
+    return this.has(name) && this.remaining[name] <= 0 && this.stamina >= this.cost(name)
+      && this.lastTriggerTick !== this.tick; // never twice in one frame
+  }
   getMove(name) { return this.defs[name]?.move; }
 
-  /** Spend stamina and start the cooldown (call when the ability successfully activates). */
+  /**
+   * Activate: re-checks readiness, spends the stamina cost and starts the cooldown.
+   * Returns false (and changes nothing) if the ability isn't ready.
+   */
   trigger(name) {
-    this.stamina = Math.max(0, this.stamina - this.cost(name));
+    if (!this.isReady(name)) return false;
+    this.stamina -= this.cost(name);
     this.remaining[name] = Math.round(this.defs[name].cooldown * FPS);
+    this.regenDelay = Math.round(REGEN_DELAY_SECONDS * FPS);
+    this.lastTriggerTick = this.tick;
+    return true;
   }
 
   /** Spend stamina for something else (e.g. blocking). */
@@ -45,8 +58,10 @@ export class SpecialAbilities {
 
   /** Called once per fixed step. */
   update(regen = true) {
+    this.tick++;
     for (const name in this.remaining) if (this.remaining[name] > 0) this.remaining[name]--;
-    if (regen) this.stamina = Math.min(this.maxStamina, this.stamina + this.regenPerFrame);
+    if (this.regenDelay > 0) this.regenDelay--;
+    else if (regen) this.stamina = Math.min(this.maxStamina, this.stamina + this.regenPerFrame);
   }
 
   /** For the HUD: stamina meter + per-ability readiness. */
