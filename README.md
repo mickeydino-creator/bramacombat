@@ -13,7 +13,9 @@ Open the URL Vite prints (http://localhost:5173). `npm run build` creates a stat
 
 ## Controls
 
-A / D move, W jump, J punch, K kick, L strong attack, R restart, H show hitboxes (debug).
+Keyboard: A / D move, W jump, J punch, K kick, L strong attack, R restart, H show hitboxes (debug).
+
+Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y strong attack, Menu/Start restart. Press any button once if the browser doesn't detect the pad right away.
 
 ## Project layout
 
@@ -25,6 +27,8 @@ A / D move, W jump, J punch, K kick, L strong attack, R restart, H show hitboxes
 - `src/models/GltfModel.js` - ready-made adapter for your own `.glb` characters with animations
 - `src/ai/AIController.js` - opponent AI
 - `src/input/KeyboardController.js` - key bindings
+- `src/input/GamepadController.js` - gamepad bindings (Gamepad API, deadzone, press detection)
+- `src/input/CombinedController.js` - merges keyboard + gamepad into one player input
 - `src/core/Game.js` - loop (fixed 60 steps/s), round flow, hitstop, effects/sound hooks
 - `src/camera`, `src/arena`, `src/ui`, `src/fx`, `src/audio` - camera, stage, HUD, hit sparks, placeholder sounds
 

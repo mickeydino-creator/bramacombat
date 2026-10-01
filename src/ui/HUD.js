@@ -10,7 +10,7 @@ export class HUD {
       </div>
       <div class="message"></div>
       <div class="overlay"><div class="winner"></div><button type="button">RESTART</button></div>
-      <div class="help">A/D move &nbsp; W jump &nbsp; J punch &nbsp; K kick &nbsp; L strong &nbsp;|&nbsp; R restart &nbsp; H hitboxes</div>`;
+      <div class="help">A/D move &nbsp; W jump &nbsp; J punch &nbsp; K kick &nbsp; L strong &nbsp;|&nbsp; Pad: stick move, A jump, X punch, B kick, Y strong, Start restart &nbsp;|&nbsp; R restart &nbsp; H hitboxes</div>`;
     document.body.appendChild(el);
     this.el = el;
     this.bars = ['.p1', '.p2'].map((s) => ({

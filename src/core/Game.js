@@ -6,6 +6,8 @@ import { CHARACTERS } from '../config/characters.js';
 import { Fighter } from '../fighter/Fighter.js';
 import { resolveHits, resolvePush } from '../combat/CombatSystem.js';
 import { KeyboardController } from '../input/KeyboardController.js';
+import { GamepadController } from '../input/GamepadController.js';
+import { CombinedController } from '../input/CombinedController.js';
 import { AIController } from '../ai/AIController.js';
 import { createArena } from '../arena/Arena.js';
 import { FightCamera } from '../camera/FightCamera.js';
@@ -41,7 +43,9 @@ export class Game {
     this.p1 = new Fighter(CHARACTERS.ember, this.scene);
     this.p2 = new Fighter(CHARACTERS.volt, this.scene);
     this.fighters = [this.p1, this.p2];
-    this.controllers = [new KeyboardController(), new AIController({ aggression: 0.55 })];
+    // Player 1 = keyboard + first gamepad, merged into one input.
+    const player1 = new CombinedController([new KeyboardController(), new GamepadController()]);
+    this.controllers = [player1, new AIController({ aggression: 0.55 })];
     this.hud.setNames(this.p1.name, this.p2.name);
 
     for (const f of this.fighters) {
@@ -106,9 +110,11 @@ export class Game {
     if (this.hitstop > 0) { this.hitstop--; return; }
 
     const fighting = this.phase === 'fight';
-    const in1 = fighting ? this.controllers[0].getInput(this.p1, this.p2) : NEUTRAL;
+    // Player input is always polled so presses don't pile up between rounds.
+    const raw1 = this.controllers[0].getInput(this.p1, this.p2);
+    if (raw1.restart && this.phase === 'over') { this.restart(); return; }
+    const in1 = fighting ? raw1 : NEUTRAL;
     const in2 = fighting ? this.controllers[1].getInput(this.p2, this.p1) : NEUTRAL;
-    if (!fighting) this.controllers[0].getInput(); // drain key presses
 
     this.p1.update(in1, this.p2);
     this.p2.update(in2, this.p1);
