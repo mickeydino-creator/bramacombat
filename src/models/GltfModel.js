@@ -16,7 +16,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
  */
 const DEFAULT_CLIPS = {
   idle: 'Idle', walk: 'Walk', jump: 'Jump', punch: 'Punch', kick: 'Kick',
-  strong: 'Strong', hit: 'Hit', ko: 'KO', victory: 'Victory',
+  strong: 'Strong', hit: 'Hit', block: 'Block', ko: 'KO', victory: 'Victory',
 };
 const ONE_SHOT = new Set(['punch', 'kick', 'strong', 'hit', 'ko', 'victory', 'jump']);
 

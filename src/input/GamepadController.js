@@ -4,7 +4,7 @@
  * or any button is pressed (browsers only expose pads after the first press).
  *
  * Produces the same input object as KeyboardController:
- *   { move: -1..1, jump: bool, actions: ['punch', ...], restart: bool }
+ *   { move: -1..1, jump: bool, block: bool, actions: ['punch', ...], restart: bool }
  * Action names must match keys in the character's `moves` (src/config/characters.js).
  */
 
@@ -14,6 +14,8 @@ export const DEFAULT_GAMEPAD_BINDINGS = {
   jump: [0, 12], // A, D-pad up
   left: [14], // D-pad left
   right: [15], // D-pad right
+  block: [7], // RT (hold)
+  triggerThreshold: 0.3, // how far a trigger must be pulled to count as held
   restart: [9, 0], // Menu / Start or A - only used on the winner screen (see Game.step)
   moveAxis: 0, // left stick X
   deadzone: 0.2,
@@ -54,7 +56,7 @@ export class GamepadController {
 
   /** Called once per fixed step. */
   getInput() {
-    const input = { move: 0, jump: false, actions: [], restart: false };
+    const input = { move: 0, jump: false, block: false, actions: [], restart: false };
     const pad = this.findPad();
     this.connected = !!pad;
     if (!pad) return input;
@@ -74,6 +76,7 @@ export class GamepadController {
     input.move = move;
 
     input.jump = isDown(b.jump);
+    input.block = b.block.some((i) => (pad.buttons[i]?.value ?? 0) > b.triggerThreshold || down[i]);
     for (const [i, action] of Object.entries(b.actions)) if (justPressed(+i)) input.actions.push(action);
     input.restart = b.restart.some(justPressed);
 

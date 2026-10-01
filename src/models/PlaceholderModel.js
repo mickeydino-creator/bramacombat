@@ -5,7 +5,7 @@ import * as THREE from 'three';
  *   model.root            THREE.Object3D added to the scene. Fighter sets its position/rotation.
  *                         The model should face +Z and stand on y = 0.
  *   model.update(f, dt)   Called every render frame. Read f.animState ('idle', 'walk', 'jump',
- *                         'punch', 'kick', 'strong', 'hit', 'ko', 'victory'), f.attackPhase
+ *                         'punch', 'kick', 'strong', 'hit', 'block', 'ko', 'victory'), f.attackPhase
  *                         ('startup'|'active'|'recovery') and f.attackPhaseProgress (0..1).
  *   model.flash()         Optional. Called when the fighter gets hit.
  *   model.reset()         Optional. Called on round restart.
@@ -147,6 +147,10 @@ export class PlaceholderModel {
         if (phase === 'startup') { p.lArm = p.rArm = lerp(-1, -3.0, k); p.torso = lerp(0, -0.35, k); p.lArmZ = p.rArmZ = 0; }
         else if (phase === 'active') { p.lArm = p.rArm = -1.3; p.lArmZ = p.rArmZ = 0; p.torso = 0.55; p.lLeg = -0.7; p.hipY = 0.82; }
         else { p.lArm = p.rArm = lerp(-1.3, -0.9, k); p.torso = lerp(0.55, 0, k); p.hipY = lerp(0.82, 0.92, k); }
+        break;
+      case 'block':
+        // Arms crossed up in front of the face, slightly crouched.
+        p.lArm = -2.1; p.rArm = -2.1; p.lArmZ = 0.55; p.rArmZ = -0.55; p.torso = -0.1; p.hipY = 0.85;
         break;
       case 'hit':
         p.torso = -0.55; p.lArm = 0.6; p.rArm = 0.4; p.lArmZ = -0.6; p.rArmZ = 0.6; p.lLeg = -0.1; p.rLeg = 0.2;

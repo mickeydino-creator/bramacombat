@@ -11,5 +11,11 @@ export const PUSH_HEIGHT = 1.5; // vertical size of the pushbox
 export const GROUND_FRICTION = 0.82; // velocity multiplier per frame when not walking
 export const INPUT_BUFFER_FRAMES = 8; // attack presses are remembered this long
 
+// Blocking (hold block while on the ground; only stops attacks from the front)
+export const BLOCK_DAMAGE_MULTIPLIER = 0.15; // blocked hits deal this fraction of damage ("chip")
+export const BLOCK_MOVE_SPEED = 0.55; // walk speed multiplier while blocking
+export const BLOCKSTUN_MULTIPLIER = 0.6; // blockstun = move hitstun * this
+export const BLOCK_PUSHBACK = 0.5; // knockback multiplier on block (no launch)
+
 export const INTRO_FRAMES = 100; // "ROUND 1 / FIGHT!" duration
 export const KO_FRAMES = 110; // delay between K.O. and the winner screen

@@ -8,7 +8,8 @@
  *   - Attacks when the player is in range, choosing the move by distance, then
  *     pauses for a random time so it doesn't attack nonstop.
  *   - Punishes: likes to use the strong attack while the player is recovering.
- *   - Defense: when the player starts an attack nearby it sometimes backs off or jumps away.
+ *   - Defense: when the player starts an attack nearby it sometimes blocks (after a short,
+ *     random reaction delay, held briefly), or backs off / jumps away.
  *   - After getting hit it backs off and won't attack for a moment.
  *   - Jumps in occasionally.
  * Every decision has random timing so it isn't fully predictable. Tune with the options below.
@@ -24,11 +25,14 @@ const IDEAL_MAX = 1.6;
 export class AIController {
   constructor({
     aggression = 0.55, // 0..1, chance to attack when an opening appears
-    defense = 0.35, // 0..1, chance to react to an incoming attack
+    defense = 0.35, // 0..1, chance to back off from an incoming attack
+    blockChance = 0.3, // 0..1, chance to block an incoming attack (checked first)
+    blockReaction = [2, 7], // frames before the block comes up (can be too late vs fast moves)
+    blockHold = [18, 32], // frames to hold block before returning to normal behaviour
     reactionFrames = [8, 16], // delay before re-thinking the current plan
     attackPause = [22, 50], // frames to wait between own attacks
   } = {}) {
-    Object.assign(this, { aggression, defense, reactionFrames, attackPause });
+    Object.assign(this, { aggression, defense, blockChance, blockReaction, blockHold, reactionFrames, attackPause });
     this.reset();
   }
 
@@ -41,6 +45,8 @@ export class AIController {
     this.lastPunished = null; // opponent attack we already tried to punish
     this.wasHit = false;
     this.footsieDir = 1;
+    this.blockDelay = 0;
+    this.blockTimer = 0;
   }
 
   getInput(self, opponent) {
@@ -59,13 +65,30 @@ export class AIController {
       this.setPlan(Math.random() < 0.7 ? 'retreat' : 'footsie', randInt(20, 40));
     }
     this.wasHit = hitNow;
+    if (hitNow) this.blockTimer = 0; // too late, got hit: drop the block
+
+    // Holding block: keep it up (also through blockstun) until the timer runs out.
+    if (this.blockTimer > 0) {
+      if (this.blockDelay > 0) {
+        this.blockDelay--; // reaction delay: about to block, do nothing else
+        return input;
+      } else {
+        input.block = true;
+        if (--this.blockTimer <= 0) this.setPlan('footsie', randInt(...this.reactionFrames));
+        return input;
+      }
+    }
     if (!self.canAct) return input; // busy (attacking / hitstun): nothing to decide
 
     // React once to each new attack the player starts close by.
     const oppAttack = opponent.state === 'attack' ? opponent.attack : null;
     if (oppAttack && oppAttack !== this.lastSeenAttack) {
       this.lastSeenAttack = oppAttack;
-      if (dist < 2.2 && Math.random() < this.defense) {
+      const r = Math.random();
+      if (dist < 2.2 && r < this.blockChance) {
+        this.blockDelay = randInt(...this.blockReaction);
+        this.blockTimer = randInt(...this.blockHold);
+      } else if (dist < 2.2 && r < this.blockChance + this.defense) {
         this.setPlan(Math.random() < 0.75 ? 'retreat' : 'jumpBack', randInt(14, 26));
       }
     }

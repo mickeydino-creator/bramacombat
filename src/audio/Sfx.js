@@ -48,6 +48,10 @@ export class Sfx {
     this.noise(0.12 + 0.1 * strength, 0.35, 900 + 600 * strength);
     this.tone({ freq: 180 / strength, endFreq: 50, time: 0.15, type: 'sine', volume: 0.3 });
   }
+  block() {
+    this.noise(0.08, 0.2, 3500);
+    this.tone({ freq: 900, endFreq: 600, time: 0.06, type: 'square', volume: 0.06 });
+  }
   jump() { this.tone({ freq: 300, endFreq: 500, time: 0.08, type: 'triangle', volume: 0.05 }); }
   ko() { this.tone({ freq: 220, endFreq: 40, time: 0.9, type: 'sawtooth', volume: 0.15 }); }
   announce() { this.tone({ freq: 440, endFreq: 880, time: 0.25, type: 'square', volume: 0.08 }); }

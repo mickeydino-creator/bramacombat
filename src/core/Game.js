@@ -15,6 +15,7 @@ import { Effects } from '../fx/Effects.js';
 import { Sfx } from '../audio/Sfx.js';
 import { HUD } from '../ui/HUD.js';
 import { DebugBoxes } from './DebugBoxes.js';
+import { BlockShield } from '../fx/BlockShield.js';
 
 const NEUTRAL = { move: 0, jump: false, actions: [] };
 
@@ -43,6 +44,7 @@ export class Game {
     this.p1 = new Fighter(CHARACTERS.ember, this.scene);
     this.p2 = new Fighter(CHARACTERS.volt, this.scene);
     this.fighters = [this.p1, this.p2];
+    this.shields = this.fighters.map((f) => new BlockShield(this.scene, f));
     // Player 1 = keyboard + first gamepad, merged into one input.
     const player1 = new CombinedController([new KeyboardController(), new GamepadController()]);
     this.controllers = [player1, new AIController({ aggression: 0.55 })];
@@ -135,6 +137,15 @@ export class Game {
   }
 
   onHit({ attacker, defender, move, point }) {
+    if (defender.lastHitBlocked && defender.alive) {
+      // Blocked: short freeze, blue spark, shield flash, no screen shake.
+      this.hitstop = Math.max(this.hitstop, Math.ceil((move.hitstop || 0) / 2));
+      this.effects.hitSpark(point.x, point.y, 0.5, 0x66ccff);
+      this.shields[this.fighters.indexOf(defender)].flash();
+      this.sfx.block();
+      this.hud.setHealth(this.fighters.indexOf(defender), defender.health, defender.maxHealth);
+      return;
+    }
     const strength = move.damage / 10;
     this.hitstop = Math.max(this.hitstop, move.hitstop || 0);
     this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, move.anim === 'strong' ? 0xff6633 : 0xffdd66);
@@ -158,6 +169,7 @@ export class Game {
     for (const f of this.fighters) f.syncModel(dt);
     this.cam.update(this.p1, this.p2, dt);
     this.effects.update(dt);
+    this.shields.forEach((s) => s.update(dt));
     this.debug.update(this.fighters);
     this.hud.setAbilities(this.p1.specials.status(), { special: 'I / RB' });
     this.renderer.render(this.scene, this.cam.camera);

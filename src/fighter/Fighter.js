@@ -1,5 +1,6 @@
 import {
   STEP, GRAVITY, ARENA_HALF_WIDTH, GROUND_FRICTION, INPUT_BUFFER_FRAMES,
+  BLOCK_DAMAGE_MULTIPLIER, BLOCK_MOVE_SPEED, BLOCKSTUN_MULTIPLIER, BLOCK_PUSHBACK,
 } from '../config/constants.js';
 import { SpecialAbilities } from '../abilities/SpecialAbilities.js';
 
@@ -12,9 +13,10 @@ const HURT_HEIGHT = 1.85;
  *
  * It does not know where its input comes from: every frame it receives an
  * input object { move: -1|0|1, jump: bool, actions: ['punch', ...] } from a
- * controller (keyboard, AI, later network/replay...).
+ * controller (keyboard, AI, later network/replay...). Optional `block: bool` = block held.
  *
- * States: idle | walk | air | attack | hitstun | ko | victory
+ * States: idle | walk | air | attack | hitstun | blockstun | ko | victory
+ * `blocking` is true while block is held on the ground (state stays idle/walk).
  */
 export class Fighter {
   constructor(def, scene) {
@@ -42,6 +44,7 @@ export class Fighter {
     this.stateFrame = 0;
     this.attack = null; // { name, move, frame, hasHit }
     this.hitstun = 0;
+    this.blocking = false;
     this.cooldowns = {};
     this.buffer = null; // { action, frames }
     this.specials.reset();
@@ -80,7 +83,16 @@ export class Fighter {
     if (actions.length) this.buffer = { action: actions[0], frames: INPUT_BUFFER_FRAMES };
     else if (this.buffer && --this.buffer.frames <= 0) this.buffer = null;
 
+    if (this.state !== 'blockstun') this.blocking = false; // updateFree sets it again while held
+
     switch (this.state) {
+      case 'blockstun':
+        // Still blocking while held; becomes free when blockstun ends.
+        this.blocking = !!input.block;
+        if (this.grounded) this.vx *= GROUND_FRICTION;
+        if (--this.hitstun <= 0) this.setState('idle');
+        break;
+
       case 'ko':
       case 'victory':
         this.vx *= this.grounded ? GROUND_FRICTION : 1;
@@ -103,14 +115,17 @@ export class Fighter {
   }
 
   updateFree(input, opponent) {
-    // Auto-face the opponent while on the ground.
-    if (this.grounded && opponent) {
+    this.blocking = !!input.block && this.grounded && !input.jump;
+
+    // Auto-face the opponent while on the ground. Not while blocking, so a
+    // cross-up (opponent jumping over you) hits from behind.
+    if (this.grounded && opponent && !this.blocking) {
       const dx = opponent.x - this.x;
       if (Math.abs(dx) > 0.05) this.facing = Math.sign(dx);
     }
 
     if (this.grounded) {
-      this.vx = input.move * this.def.walkSpeed;
+      this.vx = input.move * this.def.walkSpeed * (this.blocking ? BLOCK_MOVE_SPEED : 1);
       if (input.jump) {
         this.vy = this.jumpVelocity;
         this.vx = input.move * this.def.walkSpeed * 1.1;
@@ -123,7 +138,9 @@ export class Fighter {
       this.vx = Math.max(-max, Math.min(max, this.vx));
     }
 
-    if (this.buffer && this.tryAttack(this.buffer.action)) {
+    if (this.blocking) {
+      this.buffer = null; // can't attack while blocking; presses are dropped
+    } else if (this.buffer && this.tryAttack(this.buffer.action)) {
       this.buffer = null;
       return;
     }
@@ -230,26 +247,42 @@ export class Fighter {
 
   /** Apply a hit from `attacker` with `move`. Returns the damage dealt. */
   takeHit(move, attacker) {
-    const damage = Math.round(move.damage * attacker.def.damageMultiplier);
+    // Blocking only protects against attacks from the front.
+    const fromFront = Math.sign(attacker.x - this.x) === this.facing;
+    const blocked = this.blocking && fromFront;
+    this.lastHitBlocked = blocked;
+    const raw = move.damage * attacker.def.damageMultiplier;
+    const damage = Math.round(blocked ? raw * BLOCK_DAMAGE_MULTIPLIER : raw);
     this.health = Math.max(0, this.health - damage);
 
     this.attack = null; // getting hit interrupts your own attack
     this.buffer = null;
     this.facing = -attacker.facing; // turn toward the attacker
-    this.vx = attacker.facing * move.knockback.x;
-    this.vy = Math.max(this.vy, move.knockback.y);
-    if (move.knockback.y > 0) this.y = Math.max(this.y, 0.01);
+    if (blocked) {
+      this.vx = attacker.facing * move.knockback.x * BLOCK_PUSHBACK;
+    } else {
+      this.vx = attacker.facing * move.knockback.x;
+      this.vy = Math.max(this.vy, move.knockback.y);
+      if (move.knockback.y > 0) this.y = Math.max(this.y, 0.01);
+    }
 
     if (this.health <= 0) {
       this.setState('ko');
       this.vx = attacker.facing * Math.max(6, move.knockback.x);
       this.vy = Math.max(this.vy, 7);
       this.y = Math.max(this.y, 0.01);
+    } else if (blocked) {
+      this.hitstun = Math.max(1, Math.round(move.hitstun * BLOCKSTUN_MULTIPLIER));
+      this.state = 'blockstun';
+      this.stateFrame = 0;
+      return damage; // no red flash on block
     } else {
+      this.blocking = false;
       this.hitstun = move.hitstun;
       this.state = 'hitstun';
       this.stateFrame = 0;
     }
+    this.blocking = false;
     this.model.flash?.();
     return damage;
   }
@@ -258,9 +291,10 @@ export class Fighter {
 
   /**
    * Single animation name derived from gameplay state. Models only need to
-   * understand these names: idle, walk, jump, punch, kick, strong, hit, ko, victory.
+   * understand these names: idle, walk, jump, punch, kick, strong, hit, block, ko, victory.
    */
   get animState() {
+    if (this.blocking || this.state === 'blockstun') return 'block';
     switch (this.state) {
       case 'attack': return this.attack.move.anim;
       case 'air': return 'jump';

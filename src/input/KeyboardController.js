@@ -11,6 +11,7 @@ const ACTION_KEYS = {
 const LEFT = ['KeyA', 'ArrowLeft'];
 const RIGHT = ['KeyD', 'ArrowRight'];
 const JUMP = ['KeyW', 'ArrowUp', 'Space'];
+const BLOCK = ['ShiftLeft', 'ShiftRight']; // hold
 
 export class KeyboardController {
   constructor() {
@@ -34,6 +35,7 @@ export class KeyboardController {
     return {
       move: (this.isDown(RIGHT) ? 1 : 0) - (this.isDown(LEFT) ? 1 : 0),
       jump: this.isDown(JUMP),
+      block: this.isDown(BLOCK),
       actions,
     };
   }
