@@ -16,6 +16,7 @@ import { Sfx } from '../audio/Sfx.js';
 import { HUD } from '../ui/HUD.js';
 import { DebugBoxes } from './DebugBoxes.js';
 import { BlockShield } from '../fx/BlockShield.js';
+import { PlayerIndicator } from '../fx/PlayerIndicator.js';
 
 const NEUTRAL = { move: 0, jump: false, actions: [] };
 
@@ -45,6 +46,7 @@ export class Game {
     this.p2 = new Fighter(CHARACTERS.volt, this.scene);
     this.fighters = [this.p1, this.p2];
     this.shields = this.fighters.map((f) => new BlockShield(this.scene, f));
+    this.playerIndicator = new PlayerIndicator(this.scene, this.p1); // player only, not the AI
     // Player 1 = keyboard + first gamepad, merged into one input.
     const player1 = new CombinedController([new KeyboardController(), new GamepadController()]);
     this.controllers = [player1, new AIController({ aggression: 0.7 })];
@@ -76,6 +78,7 @@ export class Game {
   restart() {
     this.p1.reset(-2.5, 1);
     this.p2.reset(2.5, -1);
+    this.playerIndicator?.snap();
     this.controllers[1].reset?.();
     this.phase = 'intro';
     this.phaseFrame = 0;
@@ -180,6 +183,7 @@ export class Game {
     this.cam.update(this.p1, this.p2, dt);
     this.effects.update(dt);
     this.shields.forEach((s) => s.update(dt));
+    this.playerIndicator.update(dt);
     this.debug.update(this.fighters);
     this.hud.setStamina(0, this.p1.specials.status(), 'I / RB', this.p1.guardBroken);
     this.hud.setStamina(1, this.p2.specials.status(), '', this.p2.guardBroken);
