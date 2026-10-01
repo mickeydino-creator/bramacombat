@@ -158,6 +158,8 @@ export class Game {
     this.phaseFrame = 0;
     this.hitstop = 0;
     this.winner = null;
+    this.finishHimDone = false;
+    this.clearMessageAt = 0;
     this.hud.hideWinner();
     this.hud.showMessage('ROUND 1');
     this.fighters.forEach((f, i) => this.hud.setHealth(i, f.health, f.maxHealth));
@@ -215,6 +217,8 @@ export class Game {
       for (const hit of resolveHits(this.fighters)) this.onHit(hit);
     }
 
+    if (this.clearMessageAt && this.phaseFrame >= this.clearMessageAt && this.phase === 'fight') { this.hud.showMessage(''); this.clearMessageAt = 0; }
+
     if (this.phase === 'ko') {
       if (this.phaseFrame === 40 && this.winner) this.winner.setVictory();
       if (this.phaseFrame >= KO_FRAMES) {
@@ -223,7 +227,7 @@ export class Game {
         this.hud.showWinner(this.winner === this.p1 ? 'YOU WIN' : this.winner ? 'AI WINS' : 'DRAW');
         this.touch?.setVisible(false); // the darkened end screen has its own buttons
         if (this.winner === this.p1) { this.sfx.victory(); this.sfx.say('You win!'); }
-        else { this.sfx.defeat(); this.sfx.say(this.winner ? 'You lose' : 'Draw'); }
+        else { this.sfx.defeat(); if (!this.sfx.hasSample('defeat')) this.sfx.say(this.winner ? 'You lose' : 'Draw'); }
       }
     }
   }
@@ -247,7 +251,16 @@ export class Game {
     this.cam.shake(move.shake || 0.05 * strength);
     this.hud.setHealth(this.fighters.indexOf(defender), defender.health, defender.maxHealth);
 
+    // FINISH HIM! once per round, when a fighter first drops to 25% health or less.
+    if (defender.alive && !this.finishHimDone && defender.health <= defender.maxHealth * 0.25) {
+      this.finishHimDone = true;
+      this.sfx.finishHim();
+      this.hud.showMessage('FINISH HIM!');
+      this.clearMessageAt = this.phaseFrame + 90;
+    }
+
     if (!defender.alive) {
+      this.clearMessageAt = 0;
       const otherDown = !attacker.alive; // trade KO
       this.winner = otherDown ? null : attacker;
       this.phase = 'ko';
@@ -256,7 +269,7 @@ export class Game {
       this.cam.shake(0.4, 0.4);
       this.hud.showMessage('K.O.');
       this.sfx.ko();
-      this.sfx.say('K. O.');
+      if (!this.sfx.hasSample('ko')) this.sfx.say('K. O.'); // the recorded KNOCKOUT already says it
     }
   }
 

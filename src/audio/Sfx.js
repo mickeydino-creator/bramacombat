@@ -15,7 +15,7 @@
  * YOUR OWN SOUND FILES: list them in public/sounds/sounds.json, e.g. { "ko": "ko.mp3", "victory": "win.ogg" }
  * (files in public/sounds/). A listed sound replaces the synthesized one with the same name.
  * Names: punch kick strong hit heavyHit block guardBreak damage jump land ko crowd bell announce victory
- * defeat airhorn boom scratch ui. Only use files you have the rights to.
+ * defeat airhorn boom scratch finishHim ui. Only use files you have the rights to.
  */
 import { Music } from './Music.js';
 
@@ -133,24 +133,27 @@ export class Sfx {
     } catch { /* no manifest */ }
   }
 
-  playSample(buf) {
+  playSample(buf, delay = 0) {
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     src.connect(this.sfxBus);
-    src.start();
+    src.start(this.ctx.currentTime + delay);
   }
+
+  /** True when a recorded file replaces the synthesized sound `name`. */
+  hasSample(name) { return !!this.samples?.[name]; }
 
   /**
    * Rate-limited play: returns false if this sound just played (prevents double triggers),
    * or if a sound file replaced it (then the file is played instead).
    */
-  gate(name) {
+  gate(name, sampleDelay = 0) {
     if (!this.running) return false;
     const now = this.ctx.currentTime;
     if (now - (this.last[name] ?? -1) < DEDUPE_SECONDS) return false;
     this.last[name] = now;
     this.played[name] = (this.played[name] || 0) + 1;
-    if (this.samples?.[name]) { this.playSample(this.samples[name]); return false; }
+    if (this.samples?.[name]) { this.playSample(this.samples[name], sampleDelay); return false; }
     return true;
   }
 
@@ -272,12 +275,18 @@ export class Sfx {
   /** K.O.: huge impact + boom with echo, then the crowd goes wild. */
   ko() {
     this.boom();
-    if (!this.gate('ko')) return;
+    this.crowd(1.1); // the crowd goes wild after the call
+    if (!this.gate('ko')) return; // recorded "KNOCKOUT" plays here when available
     this.noise({ time: 0.15, volume: 0.9, freq: 2800, type: 'highpass', echo: 0.4 }); // crack
     this.noise({ time: 1.2, volume: 0.8, freq: 900, endFreq: 80, type: 'lowpass', echo: 0.5 }); // crash
     this.tone({ freq: 90, endFreq: 28, time: 1.4, type: 'sine', volume: 1, echo: 0.3 }); // boom
     this.tone({ freq: 180, endFreq: 45, time: 0.6, type: 'square', volume: 0.12, lowpass: 900 });
-    this.crowd(0.35);
+  }
+  /** "FINISH HIM!" when a fighter is almost out of health (recorded file, or announcer voice fallback). */
+  finishHim() {
+    if (!this.gate('finishHim')) return;
+    this.tone({ freq: 70, endFreq: 50, time: 1.2, type: 'sawtooth', volume: 0.15, lowpass: 400, echo: 0.3 });
+    this.say('Finish him!');
   }
   /** The famous deep "boom" meme-style hit: saturated sub drop. */
   boom(delay = 0) {
@@ -358,7 +367,7 @@ export class Sfx {
   /** YOU lose: "womp womp womp wommmp" sad trombone. */
   defeat() {
     this.scratch();
-    if (!this.gate('defeat')) return;
+    if (!this.gate('defeat', 0.45)) return; // recorded sad trombone plays after the scratch when available
     const notes = [[293.7, 0.5], [277.2, 0.92], [261.6, 1.34], [246.9, 1.76]];
     notes.forEach(([f, d], i) => {
       const last = i === notes.length - 1;
