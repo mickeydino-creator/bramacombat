@@ -25,13 +25,13 @@ Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y st
 - `src/combat/CombatSystem.js` - hitbox vs hurtbox detection, push collision
 - `src/models/PlaceholderModel.js` - primitive humanoid (current visuals) + the model interface
 - `src/models/GltfModel.js` - ready-made adapter for your own `.glb` characters with animations
-- `src/abilities/SpecialAbilities.js` - special ability cooldowns (abilities + cooldown seconds are set per character in `characters.js`)
+- `src/abilities/SpecialAbilities.js` - special ability stamina + cooldowns (`stamina: { max, regenPerSecond }`, `staminaCost`, `cooldown` are set per character in `characters.js`)
 - `src/ai/AIController.js` - opponent AI
 - `src/input/KeyboardController.js` - key bindings
 - `src/input/GamepadController.js` - gamepad bindings (Gamepad API, deadzone, press detection)
 - `src/input/CombinedController.js` - merges keyboard + gamepad into one player input
 - `src/core/Game.js` - loop (fixed 60 steps/s), round flow, hitstop, effects/sound hooks
-- `src/camera`, `src/arena`, `src/ui`, `src/fx`, `src/audio` - camera, stage, HUD, hit sparks, placeholder sounds
+- `src/camera`, `src/arena`, `src/ui`, `src/fx`, `src/audio` - camera, stage, HUD, hit sparks, generated sound effects (`src/audio/Sfx.js`)
 
 ## Replacing a placeholder character
 

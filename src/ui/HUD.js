@@ -5,10 +5,9 @@ export class HUD {
     el.className = 'hud';
     el.innerHTML = `
       <div class="bars">
-        <div class="bar-wrap p1"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div></div>
-        <div class="bar-wrap p2"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div></div>
+        <div class="bar-wrap p1"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div><div class="meter"><div class="meter-fill"></div><div class="meter-cost"></div></div><div class="meter-label"><span class="meter-name"></span><span class="meter-key"></span></div></div>
+        <div class="bar-wrap p2"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div><div class="meter"><div class="meter-fill"></div><div class="meter-cost"></div></div><div class="meter-label"><span class="meter-name"></span><span class="meter-key"></span></div></div>
       </div>
-      <div class="abilities"></div>
       <div class="message"></div>
       <div class="overlay"><div class="winner"></div><button type="button">RESTART</button></div>
       <div class="help">A/D move &nbsp; W jump &nbsp; J punch &nbsp; K kick &nbsp; L strong &nbsp; I special &nbsp; Shift block &nbsp;|&nbsp; Pad: stick move, A jump, X punch, B kick, Y strong, RB special, RT block, Start restart &nbsp;|&nbsp; R restart &nbsp; H hitboxes</div>`;
@@ -18,6 +17,12 @@ export class HUD {
       name: el.querySelector(`${s} .name`),
       fill: el.querySelector(`${s} .fill`),
       lag: el.querySelector(`${s} .lag`),
+      meter: el.querySelector(`${s} .meter`),
+      meterFill: el.querySelector(`${s} .meter-fill`),
+      meterCost: el.querySelector(`${s} .meter-cost`),
+      meterLabel: el.querySelector(`${s} .meter-label`),
+      meterName: el.querySelector(`${s} .meter-name`),
+      meterKey: el.querySelector(`${s} .meter-key`),
     }));
     this.message = el.querySelector('.message');
     this.overlay = el.querySelector('.overlay');
@@ -34,28 +39,25 @@ export class HUD {
   }
 
   /**
-   * Cooldown indicators for one fighter's special abilities.
-   * `status` comes from SpecialAbilities.status(); `keys` maps action name -> button label.
+   * Stamina meter under fighter i's health bar.
+   * `status` comes from SpecialAbilities.status(); `keyLabel` is the button hint (optional).
+   * Glows when the (first) special ability is ready; a tick marks its cost if it's less than full.
    */
-  setAbilities(status, keys = {}) {
-    const box = this.el.querySelector('.abilities');
-    if (!this.abilitySlots) {
-      this.abilitySlots = status.map((s) => {
-        const slot = document.createElement('div');
-        slot.className = 'ability';
-        slot.innerHTML = `<div class="ability-icon"><span class="ability-time"></span><span class="ability-key"></span></div><div class="ability-label"></div>`;
-        slot.querySelector('.ability-key').textContent = keys[s.name] || '';
-        slot.querySelector('.ability-label').textContent = s.label;
-        box.appendChild(slot);
-        return slot;
-      });
+  setStamina(i, status, keyLabel = '') {
+    const b = this.bars[i];
+    const ability = status.abilities[0];
+    const pct = Math.max(0, Math.min(1, status.stamina / status.max)) * 100;
+    b.meterFill.style.width = `${pct}%`;
+    const ready = !!ability?.ready;
+    b.meter.classList.toggle('ready', ready);
+    b.meterLabel.classList.toggle('ready', ready);
+    if (ability && b.meterName.textContent !== ability.label) {
+      b.meterName.textContent = ability.label;
+      b.meterKey.textContent = keyLabel;
+      const costPct = (ability.cost / status.max) * 100;
+      b.meterCost.style.display = costPct > 0 && costPct < 100 ? 'block' : 'none';
+      b.meterCost.style[i === 0 ? 'left' : 'right'] = `${costPct}%`;
     }
-    status.forEach((s, i) => {
-      const slot = this.abilitySlots[i];
-      slot.classList.toggle('ready', s.ready);
-      slot.style.setProperty('--progress', s.progress);
-      slot.querySelector('.ability-time').textContent = s.ready ? '' : Math.ceil(s.secondsLeft);
-    });
   }
 
   showMessage(text) { this.message.textContent = text; }

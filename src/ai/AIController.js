@@ -12,6 +12,8 @@
  *     random reaction delay, held briefly), or backs off / jumps away.
  *   - After getting hit it backs off and won't attack for a moment.
  *   - Jumps in occasionally.
+ *   - Uses its special ability (same stamina + cooldown rules as the player) mostly when it
+ *     can realistically land: player in range and recovering, stunned, or not blocking.
  * Every decision has random timing so it isn't fully predictable. Tune with the options below.
  */
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -31,8 +33,9 @@ export class AIController {
     blockHold = [18, 32], // frames to hold block before returning to normal behaviour
     reactionFrames = [8, 16], // delay before re-thinking the current plan
     attackPause = [22, 50], // frames to wait between own attacks
+    specialChance = 0.15, // 0..1, chance to use the special on a neutral opening (punishes are likelier)
   } = {}) {
-    Object.assign(this, { aggression, defense, blockChance, blockReaction, blockHold, reactionFrames, attackPause });
+    Object.assign(this, { aggression, defense, blockChance, blockReaction, blockHold, reactionFrames, attackPause, specialChance });
     this.reset();
   }
 
@@ -47,6 +50,7 @@ export class AIController {
     this.footsieDir = 1;
     this.blockDelay = 0;
     this.blockTimer = 0;
+    this.pendingAction = null; // forced action for the next 'attack' plan (used for the special)
   }
 
   getInput(self, opponent) {
@@ -96,7 +100,10 @@ export class AIController {
     // Punish: the first time we see a nearby player attack in recovery, maybe hit back.
     if (oppAttack && opponent.attackPhase === 'recovery' && oppAttack !== this.lastPunished) {
       this.lastPunished = oppAttack;
-      if (dist < 1.7 && this.attackCooldown < 15 && Math.random() < this.aggression * 0.7) this.setPlan('attack', 2);
+      if (this.specialLooksGood(self, opponent, dist) && Math.random() < 0.45) {
+        this.pendingAction = this.specialName(self);
+        this.setPlan('attack', 2);
+      } else if (dist < 1.7 && this.attackCooldown < 15 && Math.random() < this.aggression * 0.7) this.setPlan('attack', 2);
     }
 
     if (--this.planTimer <= 0) this.decide(self, opponent, dist);
@@ -127,7 +134,8 @@ export class AIController {
         input.move = this.footsieDir * toward;
         break;
       case 'attack':
-        input.actions.push(this.pickAttack(self, opponent, dist));
+        input.actions.push(this.pendingAction || this.pickAttack(self, opponent, dist));
+        this.pendingAction = null;
         this.attackCooldown = randInt(...this.attackPause);
         this.setPlan('footsie', randInt(...this.reactionFrames));
         break;
@@ -137,6 +145,7 @@ export class AIController {
   }
 
   setPlan(plan, frames) {
+    if (plan !== 'attack') this.pendingAction = null;
     this.plan = plan;
     this.planTimer = frames;
   }
@@ -154,6 +163,10 @@ export class AIController {
     } else if (this.avoidTimer > 0) {
       // Recovering from being hit: keep some distance.
       this.setPlan(dist < IDEAL_MAX + 0.3 ? 'retreat' : 'footsie', think);
+    } else if (canAttack && this.specialLooksGood(self, opponent, dist) && Math.random() < (opening ? 0.5 : this.specialChance)) {
+      // Special ability: also works from a bit outside normal range thanks to its lunge.
+      this.pendingAction = this.specialName(self);
+      this.setPlan('attack', 1);
     } else if (dist > FAR) {
       if (r < 0.06) this.setPlan('jumpIn', 1);
       else if (r < 0.85) this.setPlan('approach', randInt(20, 45));
@@ -169,6 +182,20 @@ export class AIController {
     } else {
       this.setPlan('footsie', think);
     }
+  }
+
+  specialName(self) { return Object.keys(self.def.specials || {})[0]; }
+
+  /** Special is usable (stamina + cooldown) and would realistically connect. */
+  specialLooksGood(self, opponent, dist) {
+    const name = this.specialName(self);
+    if (!name || !self.specials.isReady(name)) return false;
+    const move = self.specials.getMove(name);
+    // Approximate reach: hitbox front edge + opponent body + distance covered by the lunge.
+    const reach = move.hitbox.x + move.hitbox.w / 2 + 0.35 + (move.lunge || 0) * 0.09;
+    if (dist > reach * 0.9 || opponent.y > 0.6) return false; // out of range or high in the air
+    if (opponent.blocking || opponent.state === 'blockstun') return Math.random() < 0.1; // would be blocked
+    return true;
   }
 
   pickAttack(self, opponent, dist) {

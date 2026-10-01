@@ -51,8 +51,9 @@ export class Game {
     this.hud.setNames(this.p1.name, this.p2.name);
 
     for (const f of this.fighters) {
-      f.on('attackStart', () => this.sfx.swing());
+      f.on('attackStart', (a) => this.sfx.attack(a.name));
       f.on('jump', () => this.sfx.jump());
+      f.on('land', () => this.sfx.land());
     }
 
     window.addEventListener('resize', () => {
@@ -132,6 +133,8 @@ export class Game {
         this.phase = 'over';
         this.hud.showMessage('');
         this.hud.showWinner(this.winner ? `${this.winner.name} WINS` : 'DRAW');
+        if (this.winner === this.p1) this.sfx.victory();
+        else this.sfx.defeat();
       }
     }
   }
@@ -149,7 +152,9 @@ export class Game {
     const strength = move.damage / 10;
     this.hitstop = Math.max(this.hitstop, move.hitstop || 0);
     this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, move.anim === 'strong' ? 0xff6633 : 0xffdd66);
-    this.sfx.hit(strength);
+    if (move.damage >= 14) this.sfx.heavyHit(); // strong attack / specials
+    else this.sfx.hit(strength);
+    if (defender === this.p1) this.sfx.damage();
     this.cam.shake(move.shake || 0.05 * strength);
     this.hud.setHealth(this.fighters.indexOf(defender), defender.health, defender.maxHealth);
 
@@ -171,7 +176,8 @@ export class Game {
     this.effects.update(dt);
     this.shields.forEach((s) => s.update(dt));
     this.debug.update(this.fighters);
-    this.hud.setAbilities(this.p1.specials.status(), { special: 'I / RB' });
+    this.hud.setStamina(0, this.p1.specials.status(), 'I / RB');
+    this.hud.setStamina(1, this.p2.specials.status());
     this.renderer.render(this.scene, this.cam.camera);
   }
 }

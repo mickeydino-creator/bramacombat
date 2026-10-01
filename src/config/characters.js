@@ -23,6 +23,8 @@ import { PlaceholderModel } from '../models/PlaceholderModel.js';
  * SPECIAL ABILITIES (`specials`): same frame data as normal moves, plus
  *   label     - name shown on the HUD
  *   cooldown  - seconds before it can be used again; starts as soon as it activates
+ *   staminaCost - stamina spent on use; the ability needs at least this much stamina
+ * STAMINA (`stamina`): max = meter size, regenPerSecond = recharge speed.
  * The key in `specials` is the action name; bind it in src/input/KeyboardController.js
  * (ACTION_KEYS) and src/input/GamepadController.js (actions). Cooldown logic:
  * src/abilities/SpecialAbilities.js.
@@ -64,9 +66,11 @@ export const CHARACTERS = {
     damageMultiplier: 1.0,
     attackSpeed: 1.0, // >1 = faster startup/recovery, <1 = slower
     moves: BASE_MOVES,
+    stamina: { max: 100, regenPerSecond: 16 }, // empty -> full in ~6s
     specials: {
       special: {
         label: 'FLAME RUSH',
+        staminaCost: 100,
         cooldown: 5,
         move: {
           anim: 'punch',
@@ -91,9 +95,11 @@ export const CHARACTERS = {
     damageMultiplier: 1.05,
     attackSpeed: 0.95,
     moves: BASE_MOVES,
+    stamina: { max: 100, regenPerSecond: 12 }, // empty -> full in ~8s
     specials: {
       special: {
         label: 'THUNDER KNEE',
+        staminaCost: 100,
         cooldown: 7,
         move: {
           anim: 'kick',

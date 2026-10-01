@@ -25,7 +25,7 @@ export class Fighter {
     this.maxHealth = def.maxHealth;
     this.jumpVelocity = Math.sqrt(2 * -GRAVITY * def.jumpHeight);
 
-    this.specials = new SpecialAbilities(def.specials);
+    this.specials = new SpecialAbilities(def.specials, def.stamina);
     this.model = def.createModel();
     scene.add(this.model.root);
 
