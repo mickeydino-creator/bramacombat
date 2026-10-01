@@ -1,82 +1,161 @@
 /*
- * Very simple opponent AI. Produces the same input object as the keyboard,
+ * Simple fighting-game AI. Produces the same input object as the keyboard,
  * so the AI plays by exactly the same rules as the player.
  *
- * Every few frames it picks a "plan": approach, retreat, wait, attack or jump.
- * Tune difficulty with the options below.
+ * Behaviour, checked once per fixed step:
+ *   - Spacing: walks in when too far, steps back when too close, and shuffles
+ *     back and forth ("footsies") at fighting distance instead of standing still.
+ *   - Attacks when the player is in range, choosing the move by distance, then
+ *     pauses for a random time so it doesn't attack nonstop.
+ *   - Punishes: likes to use the strong attack while the player is recovering.
+ *   - Defense: when the player starts an attack nearby it sometimes backs off or jumps away.
+ *   - After getting hit it backs off and won't attack for a moment.
+ *   - Jumps in occasionally.
+ * Every decision has random timing so it isn't fully predictable. Tune with the options below.
  */
 const rand = (a, b) => a + Math.random() * (b - a);
+const randInt = (a, b) => Math.round(rand(a, b));
+
+// Distances (center to center). Punch reaches ~1.5, kick ~1.8, strong ~1.9 + lunge.
+const FAR = 2.0; // farther than this -> walk in
+const IDEAL_MIN = 1.1; // closer than this -> tends to step back
+const IDEAL_MAX = 1.6;
 
 export class AIController {
-  constructor({ aggression = 0.6, reactionFrames = 14 } = {}) {
-    this.aggression = aggression; // 0..1, how often it attacks when in range
-    this.reactionFrames = reactionFrames; // how long a plan lasts at minimum
+  constructor({
+    aggression = 0.55, // 0..1, chance to attack when an opening appears
+    defense = 0.35, // 0..1, chance to react to an incoming attack
+    reactionFrames = [8, 16], // delay before re-thinking the current plan
+    attackPause = [22, 50], // frames to wait between own attacks
+  } = {}) {
+    Object.assign(this, { aggression, defense, reactionFrames, attackPause });
     this.reset();
   }
 
   reset() {
     this.plan = 'wait';
-    this.timer = 30;
+    this.planTimer = 20;
+    this.attackCooldown = randInt(20, 40); // own pause between attacks
+    this.avoidTimer = 0; // > 0 after being hit: no attacking
+    this.lastSeenAttack = null; // opponent attack we already reacted (or not) to
+    this.lastPunished = null; // opponent attack we already tried to punish
+    this.wasHit = false;
+    this.footsieDir = 1;
   }
 
   getInput(self, opponent) {
     const input = { move: 0, jump: false, actions: [] };
     const dx = opponent.x - self.x;
     const dist = Math.abs(dx);
-    const toward = Math.sign(dx) || 1;
+    const toward = Math.sign(dx) || self.facing;
 
-    if (--this.timer <= 0) this.decide(self, opponent, dist);
+    if (this.attackCooldown > 0) this.attackCooldown--;
+    if (this.avoidTimer > 0) this.avoidTimer--;
+
+    // Got hit: back off and don't attack for a short while.
+    const hitNow = self.state === 'hitstun';
+    if (hitNow && !this.wasHit) {
+      this.avoidTimer = randInt(25, 45);
+      this.setPlan(Math.random() < 0.7 ? 'retreat' : 'footsie', randInt(20, 40));
+    }
+    this.wasHit = hitNow;
+    if (!self.canAct) return input; // busy (attacking / hitstun): nothing to decide
+
+    // React once to each new attack the player starts close by.
+    const oppAttack = opponent.state === 'attack' ? opponent.attack : null;
+    if (oppAttack && oppAttack !== this.lastSeenAttack) {
+      this.lastSeenAttack = oppAttack;
+      if (dist < 2.2 && Math.random() < this.defense) {
+        this.setPlan(Math.random() < 0.75 ? 'retreat' : 'jumpBack', randInt(14, 26));
+      }
+    }
+
+    // Punish: the first time we see a nearby player attack in recovery, maybe hit back.
+    if (oppAttack && opponent.attackPhase === 'recovery' && oppAttack !== this.lastPunished) {
+      this.lastPunished = oppAttack;
+      if (dist < 1.7 && this.attackCooldown < 15 && Math.random() < this.aggression * 0.7) this.setPlan('attack', 2);
+    }
+
+    if (--this.planTimer <= 0) this.decide(self, opponent, dist);
 
     switch (this.plan) {
       case 'approach':
         input.move = toward;
-        if (dist < 1.3) this.timer = 0; // in range -> decide again right away
+        if (dist < IDEAL_MAX) this.planTimer = 0; // arrived -> re-think next frame
         break;
       case 'retreat':
         input.move = -toward;
         break;
-      case 'jump':
+      case 'jumpIn':
         input.jump = true;
-        input.move = Math.random() < 0.5 ? toward : 0;
-        this.plan = 'wait';
+        input.move = toward;
+        this.setPlan('wait', randInt(10, 20));
+        break;
+      case 'jumpBack':
+        input.jump = true;
+        input.move = -toward;
+        this.setPlan('wait', randInt(10, 20));
+        break;
+      case 'footsie':
+        // Small steps in and out around fighting distance.
+        if (dist < IDEAL_MIN) this.footsieDir = -1;
+        else if (dist > IDEAL_MAX) this.footsieDir = 1;
+        else if (Math.random() < 0.04) this.footsieDir *= -1;
+        input.move = this.footsieDir * toward;
         break;
       case 'attack':
-        input.actions.push(this.pickAttack(self, dist));
-        this.plan = 'wait';
-        this.timer = Math.round(rand(8, 22));
+        input.actions.push(this.pickAttack(self, opponent, dist));
+        this.attackCooldown = randInt(...this.attackPause);
+        this.setPlan('footsie', randInt(...this.reactionFrames));
         break;
+      // 'wait': stand for a short moment
     }
     return input;
   }
 
+  setPlan(plan, frames) {
+    this.plan = plan;
+    this.planTimer = frames;
+  }
+
   decide(self, opponent, dist) {
     const r = Math.random();
-    this.timer = Math.round(rand(this.reactionFrames, this.reactionFrames * 2.5));
+    const think = randInt(...this.reactionFrames);
+    const canAttack = this.attackCooldown <= 0 && this.avoidTimer <= 0;
+    // Player is stuck in recovery or hitstun: a good moment to attack.
+    const opening = (opponent.state === 'attack' && opponent.attackPhase === 'recovery') || opponent.state === 'hitstun';
 
-    // React to an incoming attack sometimes.
-    if (opponent.state === 'attack' && dist < 2 && r < 0.3) {
-      this.plan = Math.random() < 0.6 ? 'retreat' : 'jump';
-      return;
-    }
-    if (dist > 1.6) {
-      this.plan = r < 0.8 ? 'approach' : r < 0.9 ? 'wait' : 'jump';
-      if (this.plan === 'approach') this.timer = Math.round(rand(20, 50));
-    } else if (r < this.aggression) {
-      this.plan = 'attack';
-    } else if (r < this.aggression + 0.2) {
-      this.plan = 'retreat';
-      this.timer = Math.round(rand(12, 35));
-    } else if (r < this.aggression + 0.27) {
-      this.plan = 'jump';
+    if (this.avoidTimer > 0 && opening && dist < 1.6 && r < 0.35) {
+      // Even while backing off, sometimes counter a clear opening.
+      this.setPlan('attack', 1);
+    } else if (this.avoidTimer > 0) {
+      // Recovering from being hit: keep some distance.
+      this.setPlan(dist < IDEAL_MAX + 0.3 ? 'retreat' : 'footsie', think);
+    } else if (dist > FAR) {
+      if (r < 0.06) this.setPlan('jumpIn', 1);
+      else if (r < 0.85) this.setPlan('approach', randInt(20, 45));
+      else this.setPlan('wait', randInt(6, 14));
+    } else if (canAttack && dist < 1.95 && (opening ? r < 0.85 : r < this.aggression)) {
+      this.setPlan('attack', 1);
+    } else if (r < 0.05) {
+      this.setPlan('jumpIn', 1);
+    } else if (r < 0.15) {
+      this.setPlan('retreat', randInt(10, 22));
+    } else if (r < 0.2) {
+      this.setPlan('wait', randInt(5, 12));
     } else {
-      this.plan = 'wait';
+      this.setPlan('footsie', think);
     }
   }
 
-  pickAttack(self, dist) {
-    const r = Math.random();
-    if ((self.cooldowns.strong || 0) <= 0 && r < 0.18) return 'strong';
-    if (dist > 1.25) return r < 0.7 ? 'kick' : 'punch';
-    return r < 0.6 ? 'punch' : 'kick';
+  pickAttack(self, opponent, dist) {
+    const strongReady = (self.cooldowns.strong || 0) <= 0;
+    const punishing = opponent.state === 'attack' && opponent.attackPhase === 'recovery';
+    const pressured = opponent.state === 'attack' || this.avoidTimer > 0;
+    // Slow strong attack mostly as a punish, rarely as a raw attack.
+    if (strongReady && (punishing ? Math.random() < 0.5 : !pressured && Math.random() < 0.12)) return 'strong';
+    if (dist > 1.45) return Math.random() < 0.8 ? 'kick' : 'punch'; // punch barely reaches here
+    // Under pressure, prefer the fast punch so it doesn't get interrupted.
+    return Math.random() < (pressured ? 0.85 : 0.55) ? 'punch' : 'kick';
   }
 }

@@ -14,7 +14,7 @@ export const DEFAULT_GAMEPAD_BINDINGS = {
   jump: [0, 12], // A, D-pad up
   left: [14], // D-pad left
   right: [15], // D-pad right
-  restart: [9], // Menu / Start
+  restart: [9, 0], // Menu / Start or A - only used on the winner screen (see Game.step)
   moveAxis: 0, // left stick X
   deadzone: 0.2,
 };
