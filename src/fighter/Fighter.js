@@ -4,6 +4,7 @@ import {
   BLOCK_STAMINA_DRAIN_PER_SECOND, BLOCK_HIT_STAMINA_COST, GUARD_RECOVER_STAMINA,
 } from '../config/constants.js';
 import { SpecialAbilities } from '../abilities/SpecialAbilities.js';
+import { SPECIAL_STAMINA_COST } from '../abilities/specials.js';
 import { Stamina } from '../abilities/Stamina.js';
 import { createModel } from '../models/createModel.js';
 
@@ -82,6 +83,10 @@ export class Fighter {
   /** Frame count for a specific move: shared specials (`fixed`) ignore attack speed. */
   moveFrames(move, n) { return move.fixed ? n : this.frames(n); }
 
+  /** A special needs a FULL special meter and at least SPECIAL_STAMINA_COST stamina (same rule for player and AI). */
+  canUseSpecial(name) { return this.specials.isReady(name) && this.stamina.value >= SPECIAL_STAMINA_COST; }
+  get hasStaminaForSpecial() { return this.stamina.value >= SPECIAL_STAMINA_COST; }
+
   /** Special meter recharge: called by Game every fixed step, even during hitstop. */
   tickMeters() { this.specials.update(); }
 
@@ -97,7 +102,7 @@ export class Fighter {
 
     // Remember attack presses for a few frames so inputs during recovery aren't lost.
     // Special presses during their cooldown are ignored entirely.
-    const actions = input.actions.filter((a) => !this.specials.has(a) || this.specials.isReady(a));
+    const actions = input.actions.filter((a) => !this.specials.has(a) || this.canUseSpecial(a));
     if (actions.length) this.buffer = { action: actions[0], frames: INPUT_BUFFER_FRAMES };
     else if (this.buffer && --this.buffer.frames <= 0) this.buffer = null;
 
@@ -175,7 +180,10 @@ export class Fighter {
     const move = special ? this.specials.getMove(name) : this.def.moves[name];
     if (!move || (this.cooldowns[name] || 0) > 0) return false;
     // Specials: the meter must be full and is emptied right here, or the attack doesn't happen.
-    if (special && !this.specials.trigger(name)) return false;
+    if (special) {
+      if (this.stamina.value < SPECIAL_STAMINA_COST || !this.specials.trigger(name)) return false;
+      this.stamina.spend(SPECIAL_STAMINA_COST); // a small stamina cost on top of the special meter
+    }
     this.attack = {
       name,
       move,

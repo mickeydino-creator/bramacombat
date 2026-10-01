@@ -5,8 +5,8 @@ export class HUD {
     el.className = 'hud';
     el.innerHTML = `
       <div class="bars">
-        <div class="bar-wrap p1"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div><div class="meter-label stamina-label"><span class="meter-name">STAMINA</span></div><div class="meter special"><div class="meter-fill"></div></div><div class="meter-label special-label"><span class="meter-name">SPECIAL</span><span class="special-name"></span><span class="special-state"></span><span class="meter-key"></span></div></div>
-        <div class="bar-wrap p2"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div><div class="meter-label stamina-label"><span class="meter-name">STAMINA</span></div><div class="meter special"><div class="meter-fill"></div></div><div class="meter-label special-label"><span class="meter-name">SPECIAL</span><span class="special-name"></span><span class="special-state"></span><span class="meter-key"></span></div></div>
+        <div class="bar-wrap p1"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div><div class="meter-label stamina-label"><span class="meter-name">STAMINA</span></div><div class="meter special"><div class="meter-fill"></div></div><div class="meter-label special-label"><span class="meter-name">SPECIAL POWER</span><span class="special-name"></span><span class="special-state"></span><span class="meter-key"></span></div></div>
+        <div class="bar-wrap p2"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div><div class="meter-label stamina-label"><span class="meter-name">STAMINA</span></div><div class="meter special"><div class="meter-fill"></div></div><div class="meter-label special-label"><span class="meter-name">SPECIAL POWER</span><span class="special-name"></span><span class="special-state"></span><span class="meter-key"></span></div></div>
       </div>
       <div class="message"></div>
       <button type="button" class="pause-btn" aria-label="Pause">II</button>
@@ -71,7 +71,7 @@ export class HUD {
    * Special ability meter (separate from stamina). `status` comes from SpecialAbilities.status()
    * and is read every frame, so the bar fills smoothly while recharging and empties instantly on use.
    */
-  setSpecial(i, status, keyLabel = '') {
+  setSpecial(i, status, keyLabel = '', hasStamina = true) {
     const b = this.bars[i];
     const pct = Math.max(0, Math.min(1, status.meter / status.capacity)) * 100;
     b.specialFill.style.width = `${pct}%`;
@@ -79,14 +79,28 @@ export class HUD {
       b.special.classList.remove('used'); void b.special.offsetWidth; b.special.classList.add('used'); // flash on use
     }
     b.lastSpecialPct = pct;
-    b.special.classList.toggle('ready', status.full);
-    b.specialLabel.classList.toggle('ready', status.full);
-    b.specialState.textContent = status.full ? 'READY' : `${status.secondsLeft.toFixed(1)}s`;
+    const usable = status.full && hasStamina;
+    b.special.classList.toggle('ready', usable);
+    b.specialLabel.classList.toggle('ready', usable);
+    b.specialLabel.classList.toggle('nostamina', status.full && !hasStamina);
+    b.specialState.textContent = usable ? 'READY!' : status.full ? 'NEED STAMINA' : `${status.secondsLeft.toFixed(1)}s`;
     if (b.specialName.textContent !== status.label) b.specialName.textContent = status.label;
     if (b.specialKey.textContent !== keyLabel) b.specialKey.textContent = keyLabel;
   }
 
-  showMessage(text) { this.message.textContent = text; }
+  showMessage(text) {
+    if (this.message.textContent === text) return;
+    this.message.textContent = text;
+    this.message.classList.remove('pop'); void this.message.offsetWidth; if (text) this.message.classList.add('pop');
+  }
+
+  /** Notebook page-turn transition (menu <-> fight). */
+  pageTurn() {
+    if (!this.pageEl) { this.pageEl = document.createElement('div'); this.pageEl.className = 'page-turn'; document.body.appendChild(this.pageEl); }
+    const el = this.pageEl;
+    el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+    clearTimeout(this.pageTimer); this.pageTimer = setTimeout(() => el.classList.remove('go'), 700);
+  }
   /** Hidden while a menu covers the game. */
   setVisible(v) { this.el.classList.toggle('hidden', !v); }
 

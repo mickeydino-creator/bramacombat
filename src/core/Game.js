@@ -66,7 +66,7 @@ export class Game {
       f.on('land', () => this.sfx.land());
       f.on('guardBreak', () => {
         this.sfx.guardBreak();
-        this.effects.hitSpark(f.x + f.facing * 0.4, f.y + 1.2, 1.2, 0xff4444);
+        this.effects.hitSpark(f.x + f.facing * 0.4, f.y + 1.2, 1.2, 0xff6b6b, 'CRACK!');
         this.cam.shake(0.15);
       });
     }
@@ -123,6 +123,7 @@ export class Game {
 
   /** START / RESTART: a fresh round. */
   startFight() {
+    if (this.phase === 'menu' || this.phase === 'paused') this.hud.pageTurn();
     this.menu.close();
     this.controllers[0].getInput(this.p1, this.p2); // drop presses made while in menus
     this.hud.setVisible(true);
@@ -231,7 +232,7 @@ export class Game {
     if (defender.lastHitBlocked && defender.alive) {
       // Blocked: short freeze, blue spark, shield flash, no screen shake.
       this.hitstop = Math.max(this.hitstop, Math.ceil((move.hitstop || 0) / 2));
-      this.effects.hitSpark(point.x, point.y, 0.5, 0x66ccff);
+      this.effects.hitSpark(point.x, point.y, 0.5, 0x9cc2ff, 'BLOCK');
       this.shields[this.fighters.indexOf(defender)].flash();
       this.sfx.block();
       this.hud.setHealth(this.fighters.indexOf(defender), defender.health, defender.maxHealth);
@@ -239,7 +240,7 @@ export class Game {
     }
     const strength = move.damage / 10;
     this.hitstop = Math.max(this.hitstop, move.hitstop || 0);
-    this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, move.anim === 'strong' ? 0xff6633 : 0xffdd66);
+    this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, move.anim === 'strong' ? 0xff7a45 : 0xffd93b, move.anim === 'strong' || !defender.alive);
     if (move.anim === 'strong') this.sfx.heavyHit();
     else this.sfx.hit(strength);
     if (defender === this.p1) this.sfx.damage();
@@ -263,15 +264,16 @@ export class Game {
     for (const f of this.fighters) f.syncModel(dt);
     this.cam.update(this.p1, this.p2, dt);
     this.effects.update(dt);
+    this.arena.update(dt);
     this.shields.forEach((s) => s.update(dt));
     this.playerIndicator.mesh.visible = this.phase !== 'menu';
     this.playerIndicator.update(dt);
     this.debug.update(this.fighters);
     this.fighters.forEach((f, i) => {
       this.hud.setStamina(i, f.stamina, f.guardBroken);
-      this.hud.setSpecial(i, f.specials.status(), i === 0 ? (this.touch ? 'STR' : 'L / Y') : '');
+      this.hud.setSpecial(i, f.specials.status(), i === 0 ? (this.touch ? 'STR' : 'L / Y') : '', f.hasStaminaForSpecial);
     });
-    this.touch?.setSpecialReady(this.p1.specials.full);
+    this.touch?.setSpecialReady(this.p1.canUseSpecial('strong'));
     this.renderer.render(this.scene, this.cam.camera);
   }
 }

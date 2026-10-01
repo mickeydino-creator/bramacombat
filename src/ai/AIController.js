@@ -191,7 +191,7 @@ export class AIController {
   /** Special is usable (stamina + cooldown) and would realistically connect. */
   specialLooksGood(self, opponent, dist) {
     const name = this.specialName(self);
-    if (!name || !self.specials.isReady(name)) return false;
+    if (!name || !self.canUseSpecial(name)) return false; // full meter + enough stamina, like the player
     const move = self.specials.getMove(name);
     // Approximate reach: hitbox front edge + opponent body + distance covered by the lunge.
     const reach = move.hitbox.x + move.hitbox.w / 2 + 0.35 + (move.lunge || 0) * 0.09;
@@ -209,7 +209,7 @@ export class AIController {
   }
 
   pickAttack(self, opponent, dist) {
-    const strongReady = self.specials.isReady('strong'); // strong attack = special (needs a full meter)
+    const strongReady = self.canUseSpecial('strong'); // strong attack = special (full meter + stamina)
     const punishing = opponent.state === 'attack' && opponent.attackPhase === 'recovery';
     const pressured = opponent.state === 'attack' || this.avoidTimer > 0;
     // Slow strong attack as a punish only when the player's recovery is long enough, rarely raw.

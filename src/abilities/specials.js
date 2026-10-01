@@ -16,6 +16,12 @@ export const SPECIAL_METER = Object.freeze({
   rechargeSeconds: 5, // empty -> full
 });
 
+/**
+ * Stamina spent each time a special is used (on top of emptying the special meter).
+ * Kept small on purpose; the special can't be used with less stamina than this. Same for player and AI.
+ */
+export const SPECIAL_STAMINA_COST = 12;
+
 export const SPECIALS = {
   // The STRONG ATTACK is the special: big slow hit, usable only when the special meter is full.
   strongAttack: Object.freeze({

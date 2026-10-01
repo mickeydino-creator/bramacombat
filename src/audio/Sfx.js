@@ -11,6 +11,11 @@
  * first click/tap/key (e.g. the START button).
  *
  * Each named sound is rate-limited (DEDUPE_SECONDS) so one action can't play it twice.
+ *
+ * YOUR OWN SOUND FILES: list them in public/sounds/sounds.json, e.g. { "ko": "ko.mp3", "victory": "win.ogg" }
+ * (files in public/sounds/). A listed sound replaces the synthesized one with the same name.
+ * Names: punch kick strong hit heavyHit block guardBreak damage jump land ko crowd bell announce victory
+ * defeat airhorn boom scratch ui. Only use files you have the rights to.
  */
 import { Music } from './Music.js';
 
@@ -80,6 +85,7 @@ export class Sfx {
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     this.music = new Music(ctx, this.musicBus, this.noiseBuf);
     this.applyVolumes();
+    this.loadSamples();
     ctx.addEventListener?.('statechange', () => { if (this.running) this.unlock(); });
   }
 
@@ -111,13 +117,40 @@ export class Sfx {
 
   // ---------- building blocks ----------
 
-  /** Rate-limited play: returns false if this sound just played (prevents double triggers). */
+  /** Optional sound files from public/sounds/sounds.json (missing manifest = synth only). */
+  async loadSamples() {
+    this.samples = {};
+    try {
+      const res = await fetch('/sounds/sounds.json', { cache: 'no-cache' });
+      if (!res.ok) return;
+      const list = await res.json();
+      await Promise.all(Object.entries(list).map(async ([name, file]) => {
+        try {
+          const buf = await (await fetch(`/sounds/${file}`)).arrayBuffer();
+          this.samples[name] = await this.ctx.decodeAudioData(buf);
+        } catch (e) { console.warn(`Sound "${name}" (${file}) failed to load`, e); }
+      }));
+    } catch { /* no manifest */ }
+  }
+
+  playSample(buf) {
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.sfxBus);
+    src.start();
+  }
+
+  /**
+   * Rate-limited play: returns false if this sound just played (prevents double triggers),
+   * or if a sound file replaced it (then the file is played instead).
+   */
   gate(name) {
     if (!this.running) return false;
     const now = this.ctx.currentTime;
     if (now - (this.last[name] ?? -1) < DEDUPE_SECONDS) return false;
     this.last[name] = now;
     this.played[name] = (this.played[name] || 0) + 1;
+    if (this.samples?.[name]) { this.playSample(this.samples[name]); return false; }
     return true;
   }
 
@@ -238,12 +271,51 @@ export class Sfx {
   // ---------- round ----------
   /** K.O.: huge impact + boom with echo, then the crowd goes wild. */
   ko() {
+    this.boom();
     if (!this.gate('ko')) return;
     this.noise({ time: 0.15, volume: 0.9, freq: 2800, type: 'highpass', echo: 0.4 }); // crack
     this.noise({ time: 1.2, volume: 0.8, freq: 900, endFreq: 80, type: 'lowpass', echo: 0.5 }); // crash
     this.tone({ freq: 90, endFreq: 28, time: 1.4, type: 'sine', volume: 1, echo: 0.3 }); // boom
     this.tone({ freq: 180, endFreq: 45, time: 0.6, type: 'square', volume: 0.12, lowpass: 900 });
     this.crowd(0.35);
+  }
+  /** The famous deep "boom" meme-style hit: saturated sub drop. */
+  boom(delay = 0) {
+    if (!this.gate('boom')) return;
+    const c = this.ctx, t = c.currentTime + delay;
+    const o = c.createOscillator(), g = c.createGain(), sh = c.createWaveShaper();
+    const curve = new Float32Array(256);
+    for (let i = 0; i < 256; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(x * 4); }
+    sh.curve = curve;
+    o.type = 'sine'; o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.25);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+    o.connect(sh).connect(g).connect(this.sfxBus);
+    const e = c.createGain(); e.gain.value = 0.35; g.connect(e).connect(this.echoIn);
+    o.start(t); o.stop(t + 1.7);
+  }
+  /** Classic party air horn: "BWAAA BWA BWA BWAAAAA". */
+  airhorn(delay = 0) {
+    if (!this.gate('airhorn')) return;
+    const blasts = [[0, 0.32], [0.4, 0.12], [0.56, 0.12], [0.72, 0.9]];
+    for (const [d, len] of blasts) {
+      for (const [f, v] of [[466, 0.12], [470, 0.12], [698, 0.07], [932, 0.05]]) {
+        this.tone({ freq: f * 0.97, endFreq: f, time: len, type: 'sawtooth', volume: v, delay: delay + d, attack: 0.015, lowpass: 3200, echo: 0.15 });
+      }
+    }
+  }
+  /** Record scratch (the "wait, what?" moment before losing). */
+  scratch(delay = 0) {
+    if (!this.gate('scratch')) return;
+    const c = this.ctx, t = c.currentTime + delay;
+    const src = c.createBufferSource(); src.buffer = this.noiseBuf;
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 6;
+    const g = c.createGain();
+    const pts = [[0, 600], [0.07, 3200], [0.14, 500], [0.24, 2800], [0.36, 300]];
+    pts.forEach(([d, fr]) => f.frequency.linearRampToValueAtTime(fr, t + d));
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    src.connect(f).connect(g).connect(this.sfxBus); src.start(t); src.stop(t + 0.42);
+    this.tone({ freq: 300, endFreq: 900, time: 0.08, type: 'sawtooth', volume: 0.12, delay, lowpass: 2000 });
+    this.tone({ freq: 900, endFreq: 200, time: 0.14, type: 'sawtooth', volume: 0.12, delay: delay + 0.1, lowpass: 2000 });
   }
   /** Crowd cheer: a swell of band-passed noise with scattered claps. */
   crowd(delay = 0) {
@@ -281,11 +353,13 @@ export class Sfx {
     for (const f of [523, 659, 784, 1047]) brass(f, 0.9, 1.1, 0.12); // final chord
     this.tone({ freq: 131, time: 1.2, type: 'sawtooth', volume: 0.14, delay: 0.9, lowpass: 600 });
     this.crowd(0.9);
+    this.airhorn(2.0);
   }
   /** YOU lose: "womp womp womp wommmp" sad trombone. */
   defeat() {
+    this.scratch();
     if (!this.gate('defeat')) return;
-    const notes = [[293.7, 0], [277.2, 0.42], [261.6, 0.84], [246.9, 1.26]];
+    const notes = [[293.7, 0.5], [277.2, 0.92], [261.6, 1.34], [246.9, 1.76]];
     notes.forEach(([f, d], i) => {
       const last = i === notes.length - 1;
       const len = last ? 1.3 : 0.36;

@@ -24,6 +24,11 @@ The game opens on a main menu (START / HOW TO PLAY / SETTINGS). Menus work with 
 
 Settings (saved in the browser): master / SFX / music volume, fullscreen, graphics quality (low/medium/high).
 Audio is synthesized with WebAudio (`src/audio/Sfx.js`, music in `src/audio/Music.js`) and starts after the first click/tap/key.
+To use your own sound files, list them in `public/sounds/sounds.json` (see `public/sounds/README.md`).
+
+**Look:** the whole game is a notebook come to life - paper page, blue rules, red margin, pen-outlined props and
+stickmen, "boiling" doodles, comic POW! hits and notebook-page menus. Drawing helpers: `src/style/sketch.js`; arena: `src/arena/Arena.js`;
+UI: `src/ui/hud.css`. Fonts: Permanent Marker and Patrick Hand (SIL OFL, bundled via @fontsource).
 
 ## Project layout
 
@@ -71,7 +76,8 @@ Pick who fights in `src/core/Game.js`.
 Normal attacks are the main damage source; blocking is a defensive tool; specials are a limited opportunity.
 Blocking lets 40% of damage through, drains stamina while held and on every blocked hit, stops stamina
 regeneration, and breaks at 0 stamina (no blocking until it refills to 25). The strong attack is the special and does NOT use stamina: it has
-its own SPECIAL meter that empties on use and refills in exactly 5 seconds (same for player and AI).
+its own SPECIAL POWER meter that empties on use and refills in exactly 5 seconds, and each use also costs a little
+stamina (`SPECIAL_STAMINA_COST` in `src/abilities/specials.js`, default 12); no use without enough stamina. Same rules for player and AI.
 Block tuning is in `src/config/constants.js`; per-fighter values in `characters.js`. The AI follows the same rules.
 
 ## Credits

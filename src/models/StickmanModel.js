@@ -141,6 +141,24 @@ export class StickmanModel {
 
     this.head = this.measureHead();
 
+    // ---- ink outline (inverted hull): makes the 3D stickman look drawn with a pen ----
+    const ol = this.options.outline ?? { color: 0x1f1f27, width: 0.022 };
+    if (ol) {
+      // geometry units -> world units, so the outline width is given in world units
+      const meshScale = new THREE.Vector3(); skinned.getWorldScale(meshScale);
+      const thickness = ol.width / (meshScale.x * this.scale);
+      const mat = new THREE.MeshBasicMaterial({ color: ol.color, side: THREE.BackSide });
+      mat.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>',
+          `#include <begin_vertex>\n  transformed += normalize(normal) * ${thickness.toFixed(5)};`);
+      };
+      const outline = new THREE.SkinnedMesh(skinned.geometry, mat);
+      outline.bind(skinned.skeleton, skinned.bindMatrix);
+      outline.position.copy(skinned.position); outline.quaternion.copy(skinned.quaternion); outline.scale.copy(skinned.scale);
+      outline.frustumCulled = false;
+      skinned.parent.add(outline);
+    }
+
     // ---- assemble ----
     this.inner = new THREE.Group(); // grounding offset (char units)
     this.inner.add(scene);
