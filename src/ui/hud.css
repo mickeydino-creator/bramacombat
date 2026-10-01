@@ -161,3 +161,18 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 6px; border: 1px soli
   .logo { margin-bottom: 6px; }
   .pause-btn { width: 40px; height: 40px; top: calc(env(safe-area-inset-top) + 50px); }
 }
+
+/* Portrait phones: keep movement on the left and actions on the right without overlapping.
+   Buttons are sized from the screen width; actions use 2 columns instead of 3. */
+@media (orientation: portrait) {
+  .touch-controls { --btn: clamp(54px, calc((100vw - 100px) / 4.6), 96px); --gap: clamp(10px, 3vw, 18px); --edge: clamp(12px, 3vw, 20px); }
+  .touch-half { width: calc(var(--btn) * 1.15); height: calc(var(--btn) * 1.5); }
+  .touch-actions { grid-template-columns: repeat(2, var(--btn)); }
+  .touch-rotate { top: 22%; font-size: 15px; }
+  .bars { gap: 3vw; padding: calc(env(safe-area-inset-top) + 8px) 12px 0; }
+  .bar-wrap { min-width: 0; }
+  .meter-label { flex-wrap: wrap; gap: 4px; font-size: 10px; }
+  .special-name { display: none; }
+  .name { font-size: 16px; }
+  .pause-btn { top: calc(env(safe-area-inset-top) + 92px); width: 38px; height: 38px; }
+}
