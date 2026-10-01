@@ -1,80 +1,62 @@
 import { FPS } from '../config/constants.js';
+import { SPECIAL_METER } from './specials.js';
 
 /*
- * Special abilities: stamina + cooldowns (one instance per fighter, same rules for player and AI).
+ * SPECIAL ABILITY METER (one instance per fighter, identical for player and AI).
+ * Completely separate from stamina.
  *
- * The abilities themselves are shared definitions (src/abilities/specials.js); fighters only
- * reference them. This class is the ONLY place stamina changes:
- *   - activation (trigger): spends staminaCost immediately, starts the cooldown, and pauses
- *     regeneration for REGEN_DELAY_SECONDS so the drop is clearly visible
- *   - blocking (spend): see Fighter.drainGuard
- *   - regeneration (update): regenPerSecond, capped at max
- * An ability is usable only with enough stamina AND off cooldown, and at most once per frame.
- * The HUD reads `stamina` directly from here every frame (no separate UI value).
+ *   - starts full at the beginning of a round
+ *   - using a special empties it instantly
+ *   - it refills from empty to full in exactly SPECIAL_METER.rechargeSeconds (game time)
+ *   - a special can only be used when the meter is FULL, and at most once per frame
+ *
+ * The capacity / recharge time come from the shared SPECIAL_METER (src/abilities/specials.js),
+ * never from per-character data, so nobody can have a faster meter.
+ * Charge is counted in whole frames, so "5 seconds" is exactly 300 steps at 60fps.
+ * The HUD reads `meter` directly every frame.
  */
-const DEFAULT_STAMINA = { max: 100, regenPerSecond: 6 };
-const REGEN_DELAY_SECONDS = 0.75;
-
 export class SpecialAbilities {
-  constructor(defs = {}, stamina = DEFAULT_STAMINA) {
+  constructor(defs = {}) {
     this.defs = defs;
-    this.maxStamina = stamina.max ?? DEFAULT_STAMINA.max;
-    this.regenPerFrame = (stamina.regenPerSecond ?? DEFAULT_STAMINA.regenPerSecond) / FPS;
-    this.remaining = {}; // action name -> cooldown frames left
+    this.capacity = SPECIAL_METER.capacity;
+    this.rechargeFrames = Math.round(SPECIAL_METER.rechargeSeconds * FPS);
     this.reset();
   }
 
   reset() {
-    for (const name in this.defs) this.remaining[name] = 0;
-    this.stamina = this.maxStamina; // rounds start with a full meter
-    this.regenDelay = 0;
+    this.chargeFrames = this.rechargeFrames; // full
     this.tick = 0;
     this.lastTriggerTick = -1;
   }
 
-  has(name) { return name in this.defs; }
-  cost(name) { return this.defs[name]?.staminaCost ?? 0; }
-  isReady(name) {
-    return this.has(name) && this.remaining[name] <= 0 && this.stamina >= this.cost(name)
-      && this.lastTriggerTick !== this.tick; // never twice in one frame
-  }
-  getMove(name) { return this.defs[name]?.move; }
+  get meter() { return (this.capacity * this.chargeFrames) / this.rechargeFrames; }
+  get full() { return this.chargeFrames >= this.rechargeFrames; }
+  get secondsLeft() { return (this.rechargeFrames - this.chargeFrames) / FPS; }
 
-  /**
-   * Activate: re-checks readiness, spends the stamina cost and starts the cooldown.
-   * Returns false (and changes nothing) if the ability isn't ready.
-   */
+  has(name) { return name in this.defs; }
+  getMove(name) { return this.defs[name]?.move; }
+  isReady(name) { return this.has(name) && this.full && this.lastTriggerTick !== this.tick; }
+
+  /** Activate: only when ready. Empties the meter immediately. Returns false (no change) otherwise. */
   trigger(name) {
     if (!this.isReady(name)) return false;
-    this.stamina -= this.cost(name);
-    this.remaining[name] = Math.round(this.defs[name].cooldown * FPS);
-    this.regenDelay = Math.round(REGEN_DELAY_SECONDS * FPS);
+    this.chargeFrames = 0;
     this.lastTriggerTick = this.tick;
     return true;
   }
 
-  /** Spend stamina for something else (e.g. blocking). */
-  spend(amount) { this.stamina = Math.max(0, this.stamina - amount); }
-
-  /** Called once per fixed step. */
-  update(regen = true) {
+  /** Called once per fixed game step (also during hitstop, so the 5 seconds are real seconds). */
+  update() {
     this.tick++;
-    for (const name in this.remaining) if (this.remaining[name] > 0) this.remaining[name]--;
-    if (this.regenDelay > 0) this.regenDelay--;
-    else if (regen) this.stamina = Math.min(this.maxStamina, this.stamina + this.regenPerFrame);
+    if (this.chargeFrames < this.rechargeFrames) this.chargeFrames++;
   }
 
-  /** For the HUD: stamina meter + per-ability readiness. */
+  /** For the HUD. */
   status() {
+    const [name, def] = Object.entries(this.defs)[0] || [];
     return {
-      stamina: this.stamina,
-      max: this.maxStamina,
-      abilities: Object.entries(this.defs).map(([name, def]) => ({
-        name,
-        label: def.label || name,
-        cost: this.cost(name),
-        ready: this.isReady(name),
-      })),
+      meter: this.meter, capacity: this.capacity, full: this.full, secondsLeft: this.secondsLeft,
+      label: def?.label || name || '', ready: name ? this.isReady(name) : false,
     };
   }
 }

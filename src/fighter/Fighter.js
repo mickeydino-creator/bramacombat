@@ -4,6 +4,7 @@ import {
   BLOCK_STAMINA_DRAIN_PER_SECOND, BLOCK_HIT_STAMINA_COST, GUARD_RECOVER_STAMINA,
 } from '../config/constants.js';
 import { SpecialAbilities } from '../abilities/SpecialAbilities.js';
+import { Stamina } from '../abilities/Stamina.js';
 import { createModel } from '../models/createModel.js';
 
 // Fighter body size used for the hurtbox (the area that can be hit).
@@ -28,7 +29,8 @@ export class Fighter {
     this.maxHealth = def.maxHealth;
     this.jumpVelocity = Math.sqrt(2 * -GRAVITY * def.jumpHeight);
 
-    this.specials = new SpecialAbilities(def.specials, def.stamina);
+    this.stamina = new Stamina(def.stamina); // blocking resource
+    this.specials = new SpecialAbilities(def.specials); // separate special meter (shared rules)
     // Model: either a custom factory or built from the character's `appearance` data.
     this.model = def.createModel ? def.createModel(def) : createModel(def.appearance);
     scene.add(this.model.root);
@@ -54,6 +56,7 @@ export class Fighter {
     this.runFrames = 0; // frames spent walking forward (switches walk -> run animation)
     this.cooldowns = {};
     this.buffer = null; // { action, frames }
+    this.stamina.reset();
     this.specials.reset();
     this.time = 0;
     this.model.reset?.();
@@ -79,14 +82,18 @@ export class Fighter {
   /** Frame count for a specific move: shared specials (`fixed`) ignore attack speed. */
   moveFrames(move, n) { return move.fixed ? n : this.frames(n); }
 
+  /** Special meter recharge: called by Game every fixed step, even during hitstop. */
+  tickMeters() { this.specials.update(); }
+
   /** Called once per fixed step (60/s). */
   update(input, opponent) {
     this.time += STEP;
     this.stateFrame++;
     for (const k in this.cooldowns) if (this.cooldowns[k] > 0) this.cooldowns[k]--;
-    this.specials.update(!this.blocking); // stamina doesn't recharge while blocking
+    this.stamina.update(!this.blocking); // stamina doesn't recharge while blocking
+    // (the special meter is ticked by Game every step, see tickMeters)
     if (this.landFrames > 0) this.landFrames--;
-    if (this.guardBroken && this.specials.stamina >= GUARD_RECOVER_STAMINA) this.guardBroken = false;
+    if (this.guardBroken && this.stamina.value >= GUARD_RECOVER_STAMINA) this.guardBroken = false;
 
     // Remember attack presses for a few frames so inputs during recovery aren't lost.
     // Special presses during their cooldown are ignored entirely.
@@ -167,7 +174,7 @@ export class Fighter {
     const special = this.specials.has(name);
     const move = special ? this.specials.getMove(name) : this.def.moves[name];
     if (!move || (this.cooldowns[name] || 0) > 0) return false;
-    // Specials: stamina is spent and the cooldown starts right here, or the attack doesn't happen.
+    // Specials: the meter must be full and is emptied right here, or the attack doesn't happen.
     if (special && !this.specials.trigger(name)) return false;
     this.attack = {
       name,
@@ -305,8 +312,8 @@ export class Fighter {
 
   /** Spend stamina for blocking; breaks the guard when it runs out. */
   drainGuard(amount) {
-    this.specials.spend(amount);
-    if (this.specials.stamina <= 0 && !this.guardBroken) {
+    this.stamina.spend(amount);
+    if (this.stamina.value <= 0 && !this.guardBroken) {
       this.guardBroken = true;
       this.blocking = false;
       this.emit('guardBreak');

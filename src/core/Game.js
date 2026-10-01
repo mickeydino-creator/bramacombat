@@ -117,6 +117,9 @@ export class Game {
       if (this.phaseFrame >= INTRO_FRAMES) { this.phase = 'fight'; this.hud.showMessage(''); }
     }
 
+    // Special meters recharge in real time (5 seconds), hitstop included.
+    for (const f of this.fighters) f.tickMeters();
+
     // Hitstop: freeze the fighters for a few frames on impact.
     if (this.hitstop > 0) { this.hitstop--; return; }
 
@@ -185,8 +188,10 @@ export class Game {
     this.shields.forEach((s) => s.update(dt));
     this.playerIndicator.update(dt);
     this.debug.update(this.fighters);
-    this.hud.setStamina(0, this.p1.specials.status(), 'I / RB', this.p1.guardBroken);
-    this.hud.setStamina(1, this.p2.specials.status(), '', this.p2.guardBroken);
+    this.fighters.forEach((f, i) => {
+      this.hud.setStamina(i, f.stamina, f.guardBroken);
+      this.hud.setSpecial(i, f.specials.status(), i === 0 ? 'I / RB' : '');
+    });
     this.renderer.render(this.scene, this.cam.camera);
   }
 }

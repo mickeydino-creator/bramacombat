@@ -90,7 +90,7 @@ export class AIController {
       this.lastSeenAttack = oppAttack;
       const r = Math.random();
       // Blocking costs stamina: don't try when low (same rules as the player).
-      const canBlock = !self.guardBroken && self.specials.stamina > 20;
+      const canBlock = !self.guardBroken && self.stamina.value > 20;
       if (dist < 2.2 && canBlock && r < this.blockChance) {
         this.blockDelay = randInt(...this.blockReaction);
         this.blockTimer = randInt(...this.blockHold);

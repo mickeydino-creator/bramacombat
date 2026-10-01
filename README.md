@@ -27,8 +27,9 @@ Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y st
 - `src/models/createModel.js` - builds a fighter's model from its `appearance`
 - `src/models/PlaceholderModel.js` - primitive humanoid + the model interface description
 - `src/models/GltfModel.js` - ready-made adapter for your own `.glb` characters with animations
-- `src/abilities/specials.js` - **the special ability**, defined once and shared by player and AI (cost, cooldown, frame data)
-- `src/abilities/SpecialAbilities.js` - stamina + cooldown rules (the only place stamina changes; the HUD reads it directly)
+- `src/abilities/specials.js` - **the special ability** and the special meter settings, defined once and shared by player and AI
+- `src/abilities/SpecialAbilities.js` - special meter rules: full -> usable, use -> empty, refills in exactly 5s
+- `src/abilities/Stamina.js` - stamina (blocking resource), separate from the special meter
 - `src/ai/AIController.js` - opponent AI
 - `src/input/KeyboardController.js` - key bindings
 - `src/input/GamepadController.js` - gamepad bindings (Gamepad API, deadzone, press detection)
@@ -41,7 +42,8 @@ Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y st
 All fighters are data in **`src/config/characters.js`**. `defineFighter({...})` deep-merges your values over
 `BASE_FIGHTER`, so a new fighter only lists what's different: name, health, walk speed, jump height,
 damage multiplier, attack speed, stamina and
- `appearance` (model file, colors, face, accessories). A copy-paste template is at the bottom of the file.
+`appearance` (model file, colors, face, accessories). Right now both fighters are the same plain stickman
+with identical stats; only the body color differs. A copy-paste template is at the bottom of the file.
 Pick who fights in `src/core/Game.js`.
 
 - Model: put a rigged humanoid `.glb` (Mixamo-style bone names, T-pose is fine) in `public/models/` and set
@@ -57,7 +59,8 @@ Pick who fights in `src/core/Game.js`.
 
 Normal attacks are the main damage source; blocking is a defensive tool; specials are a limited opportunity.
 Blocking lets 40% of damage through, drains stamina while held and on every blocked hit, stops stamina
-regeneration, and breaks at 0 stamina (no blocking until it refills to 25). Specials share the same stamina.
+regeneration, and breaks at 0 stamina (no blocking until it refills to 25). Specials do NOT use stamina: they have
+their own SPECIAL meter that empties on use and refills in exactly 5 seconds (same for player and AI).
 Block tuning is in `src/config/constants.js`; per-fighter values in `characters.js`. The AI follows the same rules.
 
 ## Credits

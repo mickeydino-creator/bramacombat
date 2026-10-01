@@ -13,7 +13,7 @@ import { DEFAULT_SPECIALS } from '../abilities/specials.js';
  *   jumpHeight        units (jump strength)
  *   damageMultiplier  scales all of this fighter's attack damage
  *   attackSpeed       >1 = faster startup/recovery on all attacks, <1 = slower
- *   stamina           { max, regenPerSecond } - shared by special abilities AND blocking
+ *   stamina           { max, regenPerSecond } - used by blocking (specials have their own meter)
  *   moves             normal attacks (frame data below); override single values with
  *                     moves: { punch: { damage: 7 } }
  *   specials          special abilities. Everyone shares DEFAULT_SPECIALS (src/abilities/specials.js) so the
@@ -29,8 +29,8 @@ import { DEFAULT_SPECIALS } from '../abilities/specials.js';
  *   lunge      forward speed when the attack becomes active;  shake: camera shake on hit
  *   anim       animation to play (punch, kick, strong, special, ...)
  *
- * SPECIALS: defined once in src/abilities/specials.js (staminaCost, cooldown, frame data).
- * Stamina/cooldown rules live in src/abilities/SpecialAbilities.js and apply equally to player and AI.
+ * SPECIALS: defined once in src/abilities/specials.js (frame data + the shared SPECIAL METER:
+ * full -> usable, use -> empty, refills in 5s). Rules: src/abilities/SpecialAbilities.js, same for player and AI.
  *
  * APPEARANCE (src/models/createModel.js):
  *   type: 'stickman'  url, height, colors: { body, emissive }, face, accessories
@@ -44,7 +44,8 @@ import { DEFAULT_SPECIALS } from '../abilities/specials.js';
  * Put model files in public/models/ and face images in public/faces/.
  *
  * BALANCE INTENT: normal attacks are the main damage source, blocking is a defensive
- * tool (it costs stamina and lets some damage through), specials are a limited opportunity.
+ * tool (it costs stamina and lets some damage through), specials are a limited opportunity
+ * (special meter, refills every 5 seconds).
  */
 
 const BASE_MOVES = {
@@ -82,7 +83,7 @@ export const BASE_FIGHTER = {
   jumpHeight: 2.2,
   damageMultiplier: 1.0,
   attackSpeed: 1.0,
-  stamina: { max: 100, regenPerSecond: 6 }, // shared by everyone: 0 -> full in ~17s
+  stamina: { max: 100, regenPerSecond: 6 }, // blocking resource; 0 -> full in ~17s
   moves: BASE_MOVES,
   specials: DEFAULT_SPECIALS, // same object for every fighter
   appearance: {
@@ -90,8 +91,8 @@ export const BASE_FIGHTER = {
     url: '/models/stickman.glb',
     height: 1.9,
     colors: { body: 0x1b1b1f },
-    face: { eyes: 0x111111, brows: true, mouth: 'flat' },
-    accessories: [],
+    face: false, // plain stickman: no eyes / mouth (face.js supports textures or generated faces later)
+    accessories: [], // none for now (see accessories.js)
   },
 };
 
@@ -107,29 +108,16 @@ export function defineFighter(data) {
   return merge(BASE_FIGHTER, data);
 }
 
+// For now every fighter is the same plain stickman with the same stats; only the color differs.
 export const CHARACTERS = {
   ember: defineFighter({
     name: 'EMBER',
-    walkSpeed: 4.2,
-    jumpHeight: 2.3,
-    appearance: {
-      colors: { body: 0xc8401e, emissive: 0x2a0800 },
-      face: { eyes: 0x111111, brows: true, mouth: 'grin' },
-      accessories: [{ type: 'headband', color: 0xffd23f }, { type: 'wristbands', color: 0xffd23f }],
-    },
+    appearance: { colors: { body: 0xc8401e } },
   }),
 
   volt: defineFighter({
     name: 'VOLT',
-    walkSpeed: 3.8,
-    jumpHeight: 2.1,
-    damageMultiplier: 1.05,
-    attackSpeed: 0.95,
-    appearance: {
-      colors: { body: 0x1f5fc8, emissive: 0x000a22 },
-      face: { eyes: 0x0a0a0a, brows: true, mouth: 'frown' },
-      accessories: [{ type: 'headband', color: 0x7cf2ff, tails: false }, { type: 'belt', color: 0x7cf2ff }],
-    },
+    appearance: { colors: { body: 0x1f5fc8 } },
   }),
 };
 
