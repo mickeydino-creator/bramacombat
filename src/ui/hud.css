@@ -1,0 +1,29 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: Impact, 'Arial Black', sans-serif; color: #fff; }
+#app { position: fixed; inset: 0; }
+canvas { display: block; }
+
+.hud { position: fixed; inset: 0; pointer-events: none; user-select: none; }
+.bars { display: flex; justify-content: space-between; gap: 6vw; padding: 18px 24px; }
+.bar-wrap { flex: 1; max-width: 520px; }
+.bar-wrap.p2 { text-align: right; }
+.name { font-size: 22px; letter-spacing: 2px; text-shadow: 2px 2px 0 #000; margin-bottom: 4px; }
+.bar { position: relative; height: 24px; background: #3a0a0a; border: 3px solid #eee; box-shadow: 0 0 0 2px #000; }
+.bar .lag, .bar .fill { position: absolute; top: 0; bottom: 0; left: 0; }
+.bar .lag { background: #fff; transition: width 0.6s ease-out 0.25s; }
+.bar .fill { background: linear-gradient(#ffe14a, #f0a020); transition: width 0.08s; }
+.p2 .bar .lag, .p2 .bar .fill { left: auto; right: 0; }
+
+.message { position: absolute; top: 34%; width: 100%; text-align: center; font-size: 88px; letter-spacing: 6px;
+  color: #ffd23f; text-shadow: 4px 4px 0 #8a1c1c, 0 0 30px rgba(255, 120, 0, 0.6); }
+
+.overlay { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.45); pointer-events: auto; }
+.overlay.show { display: flex; }
+.overlay .winner { font-size: 72px; color: #ffd23f; text-shadow: 4px 4px 0 #8a1c1c; margin-bottom: 24px; }
+.overlay button { font: inherit; font-size: 28px; letter-spacing: 3px; padding: 12px 40px; cursor: pointer;
+  background: #c62e2e; color: #fff; border: 3px solid #fff; }
+.overlay button:hover { background: #e04040; }
+
+.help { position: absolute; bottom: 12px; width: 100%; text-align: center; font-family: monospace; font-size: 13px;
+  color: rgba(255, 255, 255, 0.65); }
