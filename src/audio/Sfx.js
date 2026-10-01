@@ -26,7 +26,8 @@ export class Sfx {
     this.volumes = { master: 0.8, sfx: 0.9, music: 0.5 };
     this.unlock = this.unlock.bind(this);
     for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, this.unlock, { capture: true, passive: true });
-    settings?.onChange((v) => this.setVolumes(v));
+    settings?.onChange((v) => { this.setVolumes(v); this.voiceOn = v.voice !== false; });
+    this.voiceOn = true;
   }
 
   get running() { return this.ctx?.state === 'running'; }
@@ -62,6 +63,12 @@ export class Sfx {
     this.analyser = ctx.createAnalyser();
     this.analyser.fftSize = 1024;
     this.sfxBus.connect(this.master);
+    // Echo send (big moments: K.O., bell, fanfare)
+    this.echoIn = ctx.createGain();
+    const delay = ctx.createDelay(1); delay.delayTime.value = 0.19;
+    const fb = ctx.createGain(); fb.gain.value = 0.38;
+    const tone = ctx.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 2400;
+    this.echoIn.connect(delay); delay.connect(tone); tone.connect(fb); fb.connect(delay); tone.connect(this.sfxBus);
     this.musicBus.connect(this.master);
     this.master.connect(this.comp);
     this.comp.connect(ctx.destination);
@@ -120,19 +127,27 @@ export class Sfx {
     gainNode.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
   }
 
-  tone({ freq = 200, endFreq = freq, time = 0.1, type = 'square', volume = 0.2, delay = 0, attack = 0.003, dest }) {
+  tone({ freq = 200, endFreq = freq, time = 0.1, type = 'square', volume = 0.2, delay = 0, attack = 0.003, dest, echo = 0, vibrato = 0, lowpass = 0 }) {
     const c = this.ctx, t = c.currentTime + delay;
     const osc = c.createOscillator(), g = c.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, t);
     osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), t + time);
     this.env(g, t, volume, attack, time);
-    osc.connect(g).connect(dest || this.sfxBus);
+    let out = osc;
+    if (lowpass) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lowpass; out = out.connect(f); }
+    if (vibrato) { // pitch wobble (sad trombone)
+      const lfo = c.createOscillator(), depth = c.createGain();
+      lfo.frequency.value = 6; depth.gain.value = freq * vibrato;
+      lfo.connect(depth).connect(osc.frequency); lfo.start(t); lfo.stop(t + attack + time + 0.02);
+    }
+    out.connect(g).connect(dest || this.sfxBus);
+    if (echo) { const e = c.createGain(); e.gain.value = echo; g.connect(e).connect(this.echoIn); }
     osc.start(t);
     osc.stop(t + attack + time + 0.02);
   }
 
-  noise({ time = 0.1, volume = 0.3, freq = 1500, endFreq = null, type = 'lowpass', q = 1, delay = 0, attack = 0.002 }) {
+  noise({ time = 0.1, volume = 0.3, freq = 1500, endFreq = null, type = 'lowpass', q = 1, delay = 0, attack = 0.002, echo = 0 }) {
     const c = this.ctx, t = c.currentTime + delay;
     const src = c.createBufferSource();
     src.buffer = this.noiseBuf;
@@ -143,6 +158,7 @@ export class Sfx {
     const g = c.createGain();
     this.env(g, t, volume, attack, time);
     src.connect(f).connect(g).connect(this.sfxBus);
+    if (echo) { const e = c.createGain(); e.gain.value = echo; g.connect(e).connect(this.echoIn); }
     src.start(t, Math.random() * 0.5);
     src.stop(t + attack + time + 0.02);
   }
@@ -220,28 +236,82 @@ export class Sfx {
   }
 
   // ---------- round ----------
+  /** K.O.: huge impact + boom with echo, then the crowd goes wild. */
   ko() {
     if (!this.gate('ko')) return;
-    this.tone({ freq: 220, endFreq: 40, time: 0.9, type: 'sawtooth', volume: 0.25 });
-    this.noise({ time: 0.6, volume: 0.4, freq: 900, endFreq: 100, type: 'lowpass' });
+    this.noise({ time: 0.15, volume: 0.9, freq: 2800, type: 'highpass', echo: 0.4 }); // crack
+    this.noise({ time: 1.2, volume: 0.8, freq: 900, endFreq: 80, type: 'lowpass', echo: 0.5 }); // crash
+    this.tone({ freq: 90, endFreq: 28, time: 1.4, type: 'sine', volume: 1, echo: 0.3 }); // boom
+    this.tone({ freq: 180, endFreq: 45, time: 0.6, type: 'square', volume: 0.12, lowpass: 900 });
+    this.crowd(0.35);
   }
+  /** Crowd cheer: a swell of band-passed noise with scattered claps. */
+  crowd(delay = 0) {
+    if (!this.gate('crowd')) return;
+    for (const [f, v] of [[700, 0.35], [1500, 0.3], [2800, 0.18]]) {
+      this.noise({ time: 2.2, volume: v, freq: f, type: 'bandpass', q: 0.8, attack: 0.35, delay });
+    }
+    for (let i = 0; i < 18; i++) this.noise({ time: 0.04, volume: 0.25, freq: 2500, type: 'bandpass', q: 1.5, delay: delay + 0.2 + Math.random() * 1.8 });
+  }
+  /** Boxing bell "ding ding" (round start). */
+  bell() {
+    if (!this.gate('bell')) return;
+    for (const d of [0, 0.22]) {
+      for (const [m, v] of [[1, 0.3], [2.76, 0.12], [5.4, 0.06]]) {
+        this.tone({ freq: 830 * m, endFreq: 830 * m * 0.995, time: 1.1, type: 'sine', volume: v, delay: d, echo: 0.25 });
+      }
+    }
+  }
+  /** "FIGHT!" stinger. */
   announce() {
     if (!this.gate('announce')) return;
-    this.tone({ freq: 440, endFreq: 880, time: 0.22, type: 'square', volume: 0.14 });
+    this.tone({ freq: 440, endFreq: 880, time: 0.22, type: 'square', volume: 0.14, lowpass: 3000 });
     this.tone({ freq: 660, endFreq: 1320, time: 0.22, type: 'triangle', volume: 0.1 });
+    this.noise({ time: 0.3, volume: 0.25, freq: 600, endFreq: 4000, type: 'bandpass', q: 1.5 });
   }
+  /** YOU win: brass fanfare - rising arpeggio into a big chord. */
   victory() {
     if (!this.gate('victory')) return;
-    [523, 659, 784, 1047].forEach((f, i) => {
-      this.tone({ freq: f, time: i === 3 ? 0.6 : 0.14, type: 'square', volume: 0.14, delay: i * 0.13 });
-      this.tone({ freq: f * 2, time: i === 3 ? 0.6 : 0.14, type: 'triangle', volume: 0.06, delay: i * 0.13 });
-    });
+    const brass = (f, d, len, v = 0.16) => {
+      this.tone({ freq: f, time: len, type: 'sawtooth', volume: v, delay: d, attack: 0.02, lowpass: 2200, echo: 0.25 });
+      this.tone({ freq: f * 1.003, time: len, type: 'square', volume: v * 0.4, delay: d, attack: 0.02, lowpass: 1800 });
+    };
+    [392, 523, 659, 784].forEach((f, i) => brass(f, i * 0.14, 0.13));
+    brass(659, 0.6, 0.12); brass(784, 0.74, 0.12);
+    for (const f of [523, 659, 784, 1047]) brass(f, 0.9, 1.1, 0.12); // final chord
+    this.tone({ freq: 131, time: 1.2, type: 'sawtooth', volume: 0.14, delay: 0.9, lowpass: 600 });
+    this.crowd(0.9);
   }
+  /** YOU lose: "womp womp womp wommmp" sad trombone. */
   defeat() {
     if (!this.gate('defeat')) return;
-    [392, 330, 262, 196].forEach((f, i) =>
-      this.tone({ freq: f, endFreq: f * 0.97, time: i === 3 ? 0.8 : 0.24, type: 'triangle', volume: 0.22, delay: i * 0.24 }));
+    const notes = [[293.7, 0], [277.2, 0.42], [261.6, 0.84], [246.9, 1.26]];
+    notes.forEach(([f, d], i) => {
+      const last = i === notes.length - 1;
+      const len = last ? 1.3 : 0.36;
+      this.tone({ freq: f, endFreq: f * (last ? 0.94 : 0.97), time: len, type: 'sawtooth', volume: 0.24, delay: d, attack: 0.05,
+        lowpass: 1100, vibrato: last ? 0.025 : 0 });
+      this.tone({ freq: f / 2, endFreq: f / 2 * 0.97, time: len, type: 'triangle', volume: 0.16, delay: d, attack: 0.05 });
+    });
   }
+
+  /** Announcer voice (browser speech). Respects master/sfx volume and the "Announcer voice" setting. */
+  say(text) {
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth || !this.voiceOn || !this.running) return;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.85; u.pitch = 0.55;
+      u.volume = Math.min(1, this.volumes.master * this.volumes.sfx * 1.2);
+      const voice = synth.getVoices().find((v) => /en[-_]?(US|GB)/i.test(v.lang) && /male|daniel|fred|alex|david/i.test(v.name))
+        || synth.getVoices().find((v) => /^en/i.test(v.lang));
+      if (voice) u.voice = voice;
+      synth.speak(u);
+      this.played['voice:' + text] = (this.played['voice:' + text] || 0) + 1;
+    } catch { /* speech not available */ }
+  }
+
   /** UI click for menus. */
   ui() {
     if (!this.gate('ui')) return;

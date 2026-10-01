@@ -65,14 +65,7 @@ const BASE_MOVES = {
     knockback: { x: 5.5, y: 2.5 },
     hitstun: 19, hitstop: 6, lunge: 1.5,
   },
-  strong: {
-    anim: 'strong',
-    startup: 17, active: 5, recovery: 24, cooldown: 35,
-    damage: 14,
-    hitbox: { x: 1.0, y: 1.15, w: 1.1, h: 1.0 },
-    knockback: { x: 8.5, y: 6.5 },
-    hitstun: 30, hitstop: 10, lunge: 4.5, shake: 0.3,
-  },
+  // strong: the STRONG ATTACK is the shared special - see src/abilities/specials.js
 };
 
 /** Defaults every fighter starts from. */

@@ -68,21 +68,25 @@ body.touch .help { display: none; }
 .touch-controls { position: fixed; inset: 0; pointer-events: none; z-index: 5; font-family: Impact, 'Arial Black', sans-serif;
   --btn: clamp(66px, 19vmin, 110px); --gap: clamp(12px, 3.4vmin, 24px); --edge: clamp(14px, 3vmin, 28px); }
 .touch-controls.hidden { display: none; }
-.touch-move, .touch-actions { position: absolute; pointer-events: auto; touch-action: none; }
-.touch-move { left: calc(env(safe-area-inset-left) + var(--edge)); bottom: calc(env(safe-area-inset-bottom) + var(--edge));
-  display: flex; gap: var(--gap); }
+.touch-left, .touch-actions { position: absolute; pointer-events: auto; touch-action: none; }
+/* left: JUMP above the move pad */
+.touch-left { left: calc(env(safe-area-inset-left) + var(--edge)); bottom: calc(env(safe-area-inset-bottom) + var(--edge));
+  display: flex; flex-direction: column; align-items: center; gap: var(--gap); }
+.touch-move { display: flex; gap: var(--gap); }
 .touch-half, .touch-btn { width: var(--btn); height: var(--btn); border-radius: 50%; display: flex; align-items: center;
   justify-content: center; color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.12);
   border: 3px solid rgba(255, 255, 255, 0.45); font-size: calc(var(--btn) * 0.26); letter-spacing: 1px;
   -webkit-tap-highlight-color: transparent; transition: background 0.06s, transform 0.06s; }
 /* movement: extra large rounded pads */
-.touch-half { width: calc(var(--btn) * 1.45); height: calc(var(--btn) * 1.6); border-radius: 28%; font-size: calc(var(--btn) * 0.45);
+.touch-half { width: calc(var(--btn) * 1.45); height: calc(var(--btn) * 1.35); border-radius: 28%; font-size: calc(var(--btn) * 0.45);
   background: rgba(255, 255, 255, 0.14); }
 .touch-half.active, .touch-btn.active { background: rgba(255, 255, 255, 0.35); transform: scale(0.94); }
 .touch-actions { right: calc(env(safe-area-inset-right) + var(--edge)); bottom: calc(env(safe-area-inset-bottom) + var(--edge));
-  display: grid; grid-template-columns: repeat(3, var(--btn)); gap: var(--gap); }
-.touch-btn[data-action="special"] { border-color: rgba(201, 162, 39, 0.6); color: rgba(201, 162, 39, 0.75); }
-.touch-btn[data-action="special"].ready { background: rgba(255, 200, 60, 0.28); border-color: #ffe27a; color: #ffe27a; }
+  display: grid; grid-template-columns: repeat(2, var(--btn)); gap: var(--gap); }
+.touch-actions .touch-btn { width: calc(var(--btn) * 1.15); height: calc(var(--btn) * 1.15); }
+.touch-actions { grid-template-columns: repeat(2, calc(var(--btn) * 1.15)); }
+.touch-btn[data-action="strong"] { border-color: rgba(201, 162, 39, 0.6); color: rgba(201, 162, 39, 0.75); }
+.touch-btn[data-action="strong"].ready { background: rgba(255, 200, 60, 0.28); border-color: #ffe27a; color: #ffe27a; }
 .touch-btn[data-action="block"] { border-color: rgba(102, 204, 255, 0.6); }
 .touch-rotate { display: none; position: absolute; top: 40%; width: 100%; text-align: center; color: #fff;
   font-size: 18px; text-shadow: 2px 2px 0 #000; pointer-events: none; }
@@ -165,9 +169,8 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 6px; border: 1px soli
 /* Portrait phones: keep movement on the left and actions on the right without overlapping.
    Buttons are sized from the screen width; actions use 2 columns instead of 3. */
 @media (orientation: portrait) {
-  .touch-controls { --btn: clamp(54px, calc((100vw - 100px) / 4.6), 96px); --gap: clamp(10px, 3vw, 18px); --edge: clamp(12px, 3vw, 20px); }
+  .touch-controls { --btn: clamp(54px, calc((100vw - 100px) / 4.8), 96px); --gap: clamp(10px, 3vw, 18px); --edge: clamp(12px, 3vw, 20px); }
   .touch-half { width: calc(var(--btn) * 1.15); height: calc(var(--btn) * 1.5); }
-  .touch-actions { grid-template-columns: repeat(2, var(--btn)); }
   .touch-rotate { top: 22%; font-size: 15px; }
   .bars { gap: 3vw; padding: calc(env(safe-area-inset-top) + 8px) 12px 0; }
   .bar-wrap { min-width: 0; }
@@ -176,3 +179,11 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 6px; border: 1px soli
   .name { font-size: 16px; }
   .pause-btn { top: calc(env(safe-area-inset-top) + 92px); width: 38px; height: 38px; }
 }
+
+/* JUMP sits above the move pad as a wide, easy-to-hit bar */
+.touch-left .touch-btn { width: 100%; height: calc(var(--btn) * 0.95); border-radius: 22px; }
+
+/* ---------- End of round: darken the whole screen ---------- */
+.overlay { background: rgba(0, 0, 0, 0.78) !important; backdrop-filter: saturate(0.4) brightness(0.7); -webkit-backdrop-filter: saturate(0.4) brightness(0.7); }
+.overlay.show { animation: overlay-in 0.6s ease-out; }
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }

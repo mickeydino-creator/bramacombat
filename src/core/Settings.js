@@ -3,7 +3,7 @@
  * Other systems subscribe with onChange() and apply the values themselves.
  */
 const KEY = 'bramacombat.settings';
-const DEFAULTS = { master: 0.8, sfx: 0.9, music: 0.5, quality: 'high' };
+const DEFAULTS = { master: 0.8, sfx: 0.9, music: 0.5, quality: 'high', voice: true };
 export const QUALITY_LEVELS = ['low', 'medium', 'high'];
 
 export class Settings {

@@ -25,22 +25,22 @@ const HOW_TO_PLAY = `
   <div class="howto-grid">
     <section><h3>KEYBOARD</h3>
       <p><kbd>A</kbd> <kbd>D</kbd> Move</p><p><kbd>W</kbd> Jump</p>
-      <p><kbd>J</kbd> Punch</p><p><kbd>K</kbd> Kick</p><p><kbd>L</kbd> Strong attack</p>
-      <p><kbd>Shift</kbd> (hold) Block</p><p><kbd>I</kbd> Special</p><p><kbd>Esc</kbd> Pause</p></section>
+      <p><kbd>J</kbd> Punch</p><p><kbd>K</kbd> Kick</p><p><kbd>L</kbd> Strong attack (special)</p>
+      <p><kbd>Shift</kbd> (hold) Block</p><p><kbd>Esc</kbd> Pause</p></section>
     <section><h3>XBOX CONTROLLER</h3>
       <p><kbd>Left stick</kbd> / <kbd>D-pad</kbd> Move</p><p><kbd>A</kbd> Jump</p>
-      <p><kbd>X</kbd> Punch</p><p><kbd>B</kbd> Kick</p><p><kbd>Y</kbd> Strong attack</p>
-      <p><kbd>RT</kbd> (hold) Block</p><p><kbd>RB</kbd> Special</p><p><kbd>Start</kbd> Pause</p></section>
+      <p><kbd>X</kbd> Punch</p><p><kbd>B</kbd> Kick</p><p><kbd>Y</kbd> Strong attack (special)</p>
+      <p><kbd>RT</kbd> (hold) Block</p><p><kbd>Start</kbd> Pause</p></section>
     <section><h3>MOBILE</h3>
-      <p><kbd>&#9664;</kbd> <kbd>&#9654;</kbd> (hold) Move</p><p><kbd>JUMP</kbd> Jump</p>
-      <p><kbd>P</kbd> Punch</p><p><kbd>K</kbd> Kick</p><p><kbd>STR</kbd> Strong attack</p>
-      <p><kbd>BLK</kbd> (hold) Block</p><p><kbd>SP</kbd> Special</p><p><kbd>II</kbd> Pause</p></section>
+      <p><i>Left side</i></p><p><kbd>&#9664;</kbd> <kbd>&#9654;</kbd> (hold) Move</p><p><kbd>JUMP</kbd> Jump</p>
+      <p><i>Right side</i></p><p><kbd>P</kbd> Punch</p><p><kbd>K</kbd> Kick</p><p><kbd>STR</kbd> Strong attack (special)</p>
+      <p><kbd>BLK</kbd> (hold) Block / shield</p><p><kbd>II</kbd> Pause</p></section>
   </div>
   <div class="howto-rules">
-    <p><b>Attacks</b> - Punch is fast, kick reaches further, strong attack is slow but hits hard. Every attack has a wind-up, so time it.</p>
+    <p><b>Attacks</b> - Punch is fast, kick reaches further. Every attack has a wind-up, so time it.</p>
     <p><b>Blocking</b> - Hold block to reduce damage from the front (attacks from behind still hurt). Blocking slows you down and drains <b>STAMINA</b>; at zero your guard breaks.</p>
     <p><b>Jumping</b> - Jump over attacks or over your opponent to hit them from behind.</p>
-    <p><b>Special</b> - Usable when the gold <b>SPECIAL</b> meter is full. Using it empties the meter; it refills in ${SPECIAL_METER.rechargeSeconds} seconds. The AI follows the same rules.</p>
+    <p><b>Strong attack = special</b> - A slow, hard-hitting blow. Usable only when the gold <b>SPECIAL</b> meter is full; using it empties the meter and it refills in ${SPECIAL_METER.rechargeSeconds} seconds. The AI follows the same rules.</p>
   </div>`;
 
 export class Menu {
@@ -74,6 +74,7 @@ export class Menu {
         <div class="setting"><label>MASTER VOLUME</label><input type="range" min="0" max="1" step="0.05" data-setting="master"><span class="val"></span></div>
         <div class="setting"><label>SFX VOLUME</label><input type="range" min="0" max="1" step="0.05" data-setting="sfx"><span class="val"></span></div>
         <div class="setting"><label>MUSIC VOLUME</label><input type="range" min="0" max="1" step="0.05" data-setting="music"><span class="val"></span></div>
+        <div class="setting"><label>ANNOUNCER VOICE</label><button data-act="voice" class="toggle">ON</button></div>
         <div class="setting fs-row"><label>FULLSCREEN</label><button data-act="fullscreen" class="toggle">OFF</button></div>
         <div class="setting"><label>GRAPHICS</label><div class="segmented">${QUALITY_LEVELS.map((q) => `<button data-quality="${q}">${q.toUpperCase()}</button>`).join('')}</div></div>
         <button data-act="back" class="back">BACK</button>
@@ -110,6 +111,7 @@ export class Menu {
     else if (a === 'mainmenu') this.onMainMenu();
     else if (a === 'back') this.back();
     else if (a === 'fullscreen') toggleFullscreen();
+    else if (a === 'voice') this.settings.set('voice', !this.settings.get('voice'));
   }
 
   /** Open a screen on top of the current one (BACK returns). `reset` starts a new stack. */
@@ -139,6 +141,8 @@ export class Menu {
       input.nextElementSibling.textContent = `${Math.round(v[input.dataset.setting] * 100)}%`;
     }
     for (const b of this.el.querySelectorAll('[data-quality]')) b.classList.toggle('on', b.dataset.quality === v.quality);
+    const vb = this.el.querySelector('[data-act=voice]');
+    vb.textContent = v.voice ? 'ON' : 'OFF'; vb.classList.toggle('on', !!v.voice);
     const fs = this.el.querySelector('[data-act=fullscreen]');
     if (fs) { fs.textContent = isFullscreen() ? 'ON' : 'OFF'; fs.classList.toggle('on', isFullscreen()); }
   }

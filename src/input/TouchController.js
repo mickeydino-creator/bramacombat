@@ -3,22 +3,23 @@
  * Produces the same input object as KeyboardController / GamepadController and is merged
  * with them in CombinedController, so it drives exactly the same fighter actions.
  *
- * Left side: a move pad (hold the left or right half; sliding between them works).
- * Right side: JUMP, PUNCH, KICK, STRONG, BLOCK (hold), SPECIAL.
+ * Left side: JUMP above the move pad (hold left/right; sliding between them works).
+ * Right side: STR (strong attack = the special), BLK (hold), P (punch), K (kick).
  *
  * One touch = one action: attacks fire on the touch's first contact only (one pointerdown
  * per finger), mouse/click emulation is suppressed, and the fighter's own rules (special
  * meter, cooldowns, input buffer) still apply on top.
  */
-const BUTTONS = [
-  // [action, label, kind] - kind: 'tap' (fires once per touch) or 'hold'
-  ['special', 'SP', 'tap'],
-  ['strong', 'STR', 'tap'],
-  ['jump', 'JUMP', 'tap'],
+// [action, label, kind] - kind: 'tap' (fires once per touch) or 'hold'
+const JUMP_BUTTON = ['jump', 'JUMP', 'tap']; // left side, with movement
+const ACTION_BUTTONS = [ // right side
+  ['strong', 'STR', 'tap'], // strong attack = the special (needs a full special meter)
   ['block', 'BLK', 'hold'],
   ['punch', 'P', 'tap'],
   ['kick', 'K', 'tap'],
 ];
+const BUTTONS = [JUMP_BUTTON, ...ACTION_BUTTONS];
+const button = ([a, label]) => `<div class="touch-btn" data-action="${a}">${label}</div>`;
 
 export function isTouchDevice() {
   return (window.matchMedia?.('(pointer: coarse)').matches ?? false) || navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
@@ -35,12 +36,15 @@ export class TouchController {
     const root = document.createElement('div');
     root.className = 'touch-controls';
     root.innerHTML = `
-      <div class="touch-move"><div class="touch-half" data-dir="-1">&#9664;</div><div class="touch-half" data-dir="1">&#9654;</div></div>
-      <div class="touch-actions">${BUTTONS.map(([a, label]) => `<div class="touch-btn" data-action="${a}">${label}</div>`).join('')}</div>
+      <div class="touch-left">
+        ${button(JUMP_BUTTON)}
+        <div class="touch-move"><div class="touch-half" data-dir="-1">&#9664;</div><div class="touch-half" data-dir="1">&#9654;</div></div>
+      </div>
+      <div class="touch-actions">${ACTION_BUTTONS.map(button).join('')}</div>
       <div class="touch-rotate">Rotate your phone for the best experience</div>`;
     document.body.appendChild(root);
     this.root = root;
-    this.specialBtn = root.querySelector('[data-action="special"]');
+    this.specialBtn = root.querySelector('[data-action="strong"]');
 
     // No scrolling / zooming / long-press menus while playing.
     root.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -98,7 +102,7 @@ export class TouchController {
 
   setVisible(v) { this.root.classList.toggle('hidden', !v); }
 
-  /** Dim the SP button while the special meter is recharging (visual hint only). */
+  /** Dim the STR (special) button while the special meter is recharging (visual hint only). */
   setSpecialReady(ready) { this.specialBtn.classList.toggle('ready', ready); }
 
   /** Called once per fixed step. */

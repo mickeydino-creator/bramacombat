@@ -209,11 +209,12 @@ export class AIController {
   }
 
   pickAttack(self, opponent, dist) {
-    const strongReady = (self.cooldowns.strong || 0) <= 0;
+    const strongReady = self.specials.isReady('strong'); // strong attack = special (needs a full meter)
     const punishing = opponent.state === 'attack' && opponent.attackPhase === 'recovery';
     const pressured = opponent.state === 'attack' || this.avoidTimer > 0;
     // Slow strong attack as a punish only when the player's recovery is long enough, rarely raw.
-    const strongFits = this.framesLeft(opponent) > self.frames(self.def.moves.strong.startup);
+    const strongMove = self.specials.getMove('strong');
+    const strongFits = strongMove && this.framesLeft(opponent) > self.moveFrames(strongMove, strongMove.startup);
     if (strongReady && (punishing ? strongFits && Math.random() < 0.6 : !pressured && Math.random() < 0.12)) return 'strong';
     if (punishing) return dist > 1.45 ? 'kick' : 'punch'; // short window: fastest move that reaches
     if (dist > 1.45) return Math.random() < 0.8 ? 'kick' : 'punch'; // punch barely reaches here

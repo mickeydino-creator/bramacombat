@@ -129,7 +129,8 @@ export class Game {
     this.touch?.setVisible(true);
     this.sfx.setMusicMode('fight');
     this.restart();
-    this.sfx.announce();
+    this.sfx.bell();
+    this.sfx.say('Round one');
   }
 
   pause() {
@@ -186,7 +187,7 @@ export class Game {
     this.phaseFrame++;
 
     if (this.phase === 'intro') {
-      if (this.phaseFrame === Math.floor(INTRO_FRAMES * 0.55)) { this.hud.showMessage('FIGHT!'); this.sfx.announce(); }
+      if (this.phaseFrame === Math.floor(INTRO_FRAMES * 0.55)) { this.hud.showMessage('FIGHT!'); this.sfx.announce(); this.sfx.say('Fight!'); }
       if (this.phaseFrame >= INTRO_FRAMES) { this.phase = 'fight'; this.hud.showMessage(''); }
     }
 
@@ -219,8 +220,9 @@ export class Game {
         this.phase = 'over';
         this.hud.showMessage('');
         this.hud.showWinner(this.winner === this.p1 ? 'YOU WIN' : this.winner ? 'AI WINS' : 'DRAW');
-        if (this.winner === this.p1) this.sfx.victory();
-        else this.sfx.defeat();
+        this.touch?.setVisible(false); // the darkened end screen has its own buttons
+        if (this.winner === this.p1) { this.sfx.victory(); this.sfx.say('You win!'); }
+        else { this.sfx.defeat(); this.sfx.say(this.winner ? 'You lose' : 'Draw'); }
       }
     }
   }
@@ -238,7 +240,7 @@ export class Game {
     const strength = move.damage / 10;
     this.hitstop = Math.max(this.hitstop, move.hitstop || 0);
     this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, move.anim === 'strong' ? 0xff6633 : 0xffdd66);
-    if (move.anim === 'strong' || move.anim === 'special') this.sfx.heavyHit();
+    if (move.anim === 'strong') this.sfx.heavyHit();
     else this.sfx.hit(strength);
     if (defender === this.p1) this.sfx.damage();
     this.cam.shake(move.shake || 0.05 * strength);
@@ -253,6 +255,7 @@ export class Game {
       this.cam.shake(0.4, 0.4);
       this.hud.showMessage('K.O.');
       this.sfx.ko();
+      this.sfx.say('K. O.');
     }
   }
 
@@ -266,7 +269,7 @@ export class Game {
     this.debug.update(this.fighters);
     this.fighters.forEach((f, i) => {
       this.hud.setStamina(i, f.stamina, f.guardBroken);
-      this.hud.setSpecial(i, f.specials.status(), i === 0 ? (this.touch ? 'SP' : 'I / RB') : '');
+      this.hud.setSpecial(i, f.specials.status(), i === 0 ? (this.touch ? 'STR' : 'L / Y') : '');
     });
     this.touch?.setSpecialReady(this.p1.specials.full);
     this.renderer.render(this.scene, this.cam.camera);

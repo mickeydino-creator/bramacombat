@@ -5,8 +5,7 @@
 const ACTION_KEYS = {
   KeyJ: 'punch',
   KeyK: 'kick',
-  KeyL: 'strong',
-  KeyI: 'special',
+  KeyL: 'strong', // strong attack = the special (needs a full special meter)
 };
 const LEFT = ['KeyA', 'ArrowLeft'];
 const RIGHT = ['KeyD', 'ArrowRight'];

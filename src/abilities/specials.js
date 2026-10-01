@@ -17,20 +17,20 @@ export const SPECIAL_METER = Object.freeze({
 });
 
 export const SPECIALS = {
-  surgeStrike: Object.freeze({
-    label: 'SURGE STRIKE',
+  // The STRONG ATTACK is the special: big slow hit, usable only when the special meter is full.
+  strongAttack: Object.freeze({
+    label: 'STRONG ATTACK',
     move: Object.freeze({
-      anim: 'special',
+      anim: 'strong',
       fixed: true, // not scaled by character damage / attack speed
-      // Usable every 5s, so it hits hard but is slow and very punishable if blocked or whiffed.
-      startup: 14, active: 6, recovery: 30, cooldown: 0,
-      damage: 8,
-      hitbox: Object.freeze({ x: 0.9, y: 1.2, w: 1.0, h: 0.8 }),
-      knockback: Object.freeze({ x: 5, y: 3 }),
-      hitstun: 22, hitstop: 12, lunge: 9, shake: 0.3,
+      startup: 17, active: 5, recovery: 24, cooldown: 0, // the meter is its cooldown
+      damage: 14,
+      hitbox: Object.freeze({ x: 1.0, y: 1.15, w: 1.1, h: 1.0 }),
+      knockback: Object.freeze({ x: 8.5, y: 6.5 }),
+      hitstun: 30, hitstop: 10, lunge: 4.5, shake: 0.3,
     }),
   }),
 };
 
-/** The default special every fighter uses, bound to the `special` action (I / RB). */
-export const DEFAULT_SPECIALS = Object.freeze({ special: SPECIALS.surgeStrike });
+/** Every fighter's special, bound to the `strong` action (L / Y / STR). */
+export const DEFAULT_SPECIALS = Object.freeze({ strong: SPECIALS.strongAttack });

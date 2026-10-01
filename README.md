@@ -16,11 +16,11 @@ Open the URL Vite prints (http://localhost:5173). `npm run build` creates a stat
 The game opens on a main menu (START / HOW TO PLAY / SETTINGS). Menus work with mouse/touch, keyboard
 (arrows + Enter, Esc = back) and gamepad (D-pad/stick + A, B = back). In the fight the player is **YOU**, the opponent **AI**.
 
-- Keyboard: A / D move, W jump, J punch, K kick, L strong attack, I special, hold Shift block, Esc pause, R restart, H hitboxes (debug).
-- Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y strong attack, RB special, hold RT block,
+- Keyboard: A / D move, W jump, J punch, K kick, L strong attack (= the special), hold Shift block, Esc pause, R restart, H hitboxes (debug).
+- Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y strong attack (= the special), hold RT block,
   Start pause. Winner screen: A/Start restart, B main menu. Press any button once if the pad isn't detected right away.
-- Touch (phones/tablets, shown only on touch devices, best in landscape): hold the big left/right pads to move,
-  JUMP, P (punch), K (kick), STR (strong), hold BLK (block), SP (special), II (top) pause.
+- Touch (phones/tablets, shown only on touch devices): left side = JUMP + hold the big left/right pads to move;
+  right side = P (punch), K (kick), STR (strong attack = special), hold BLK (block/shield). II (top) pause.
 
 Settings (saved in the browser): master / SFX / music volume, fullscreen, graphics quality (low/medium/high).
 Audio is synthesized with WebAudio (`src/audio/Sfx.js`, music in `src/audio/Music.js`) and starts after the first click/tap/key.
@@ -35,7 +35,7 @@ Audio is synthesized with WebAudio (`src/audio/Sfx.js`, music in `src/audio/Musi
 - `src/models/createModel.js` - builds a fighter's model from its `appearance`
 - `src/models/PlaceholderModel.js` - primitive humanoid + the model interface description
 - `src/models/GltfModel.js` - ready-made adapter for your own `.glb` characters with animations
-- `src/abilities/specials.js` - **the special ability** and the special meter settings, defined once and shared by player and AI
+- `src/abilities/specials.js` - **the special** (the STRONG ATTACK) and the special meter settings, defined once and shared by player and AI
 - `src/abilities/SpecialAbilities.js` - special meter rules: full -> usable, use -> empty, refills in exactly 5s
 - `src/abilities/Stamina.js` - stamina (blocking resource), separate from the special meter
 - `src/ai/AIController.js` - opponent AI
@@ -70,8 +70,8 @@ Pick who fights in `src/core/Game.js`.
 
 Normal attacks are the main damage source; blocking is a defensive tool; specials are a limited opportunity.
 Blocking lets 40% of damage through, drains stamina while held and on every blocked hit, stops stamina
-regeneration, and breaks at 0 stamina (no blocking until it refills to 25). Specials do NOT use stamina: they have
-their own SPECIAL meter that empties on use and refills in exactly 5 seconds (same for player and AI).
+regeneration, and breaks at 0 stamina (no blocking until it refills to 25). The strong attack is the special and does NOT use stamina: it has
+its own SPECIAL meter that empties on use and refills in exactly 5 seconds (same for player and AI).
 Block tuning is in `src/config/constants.js`; per-fighter values in `characters.js`. The AI follows the same rules.
 
 ## Credits
