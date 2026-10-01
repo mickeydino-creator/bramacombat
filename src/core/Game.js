@@ -17,6 +17,8 @@ import { Sfx } from '../audio/Sfx.js';
 import { HUD } from '../ui/HUD.js';
 import { DebugBoxes } from './DebugBoxes.js';
 import { BlockShield } from '../fx/BlockShield.js';
+import { Settings } from './Settings.js';
+import { Menu } from '../ui/Menu.js';
 import { PlayerIndicator } from '../fx/PlayerIndicator.js';
 
 const NEUTRAL = { move: 0, jump: false, actions: [] };
@@ -35,11 +37,12 @@ export class Game {
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    createArena(this.scene);
+    this.arena = createArena(this.scene);
+    this.settings = new Settings();
     this.cam = new FightCamera(window.innerWidth / window.innerHeight);
     this.effects = new Effects(this.scene);
-    this.sfx = new Sfx();
-    this.hud = new HUD(() => this.restart());
+    this.sfx = new Sfx(this.settings);
+    this.hud = new HUD({ onRestart: () => this.startFight(), onMainMenu: () => this.mainMenu(), onPause: () => this.pause() });
     this.debug = new DebugBoxes(this.scene);
 
     // ---- Fighters: pick characters here ----
@@ -51,9 +54,11 @@ export class Game {
     // Player 1 = keyboard + first gamepad, merged into one input.
     // Touch buttons are only added on touch devices.
     this.touch = isTouchDevice() ? new TouchController() : null;
-    const player1 = new CombinedController([new KeyboardController(), new GamepadController(), ...(this.touch ? [this.touch] : [])]);
+    this.gamepad = new GamepadController();
+    const player1 = new CombinedController([new KeyboardController(), this.gamepad, ...(this.touch ? [this.touch] : [])]);
     this.controllers = [player1, new AIController({ aggression: 0.7 })];
-    this.hud.setNames(this.p1.name, this.p2.name);
+    // The UI always calls the player-controlled fighter YOU and the opponent AI.
+    this.hud.setNames('YOU', 'AI');
 
     for (const f of this.fighters) {
       f.on('attackStart', (a) => this.sfx.attack(a.name));
@@ -71,11 +76,75 @@ export class Game {
       this.cam.resize(window.innerWidth / window.innerHeight);
     });
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyR' || (e.code === 'Enter' && this.phase === 'over')) this.restart();
+      if (this.menu.visible) return; // the menu handles its own keys
+      if (e.code === 'Escape' && this.phase === 'over') { this.mainMenu(); e.stopImmediatePropagation(); }
+      else if (e.code === 'Escape' || e.code === 'KeyP') {
+        this.pause();
+        e.stopImmediatePropagation(); // the menu that just opened must not also handle this Esc (= resume)
+      }
+      else if (e.code === 'KeyR' || (e.code === 'Enter' && this.phase === 'over')) this.startFight();
       if (e.code === 'KeyH') this.debug.toggle();
     });
 
+    this.menu = new Menu({
+      settings: this.settings, sfx: this.sfx, gamepad: this.gamepad,
+      onStart: () => this.startFight(), onResume: () => this.resume(),
+      onRestart: () => this.startFight(), onMainMenu: () => this.mainMenu(),
+    });
+    this.settings.onChange((v) => this.applyQuality(v.quality));
+    this.mainMenu();
+  }
+
+  /** Graphics quality: resolution and shadows (safe to change at runtime). */
+  applyQuality(q) {
+    const dpr = window.devicePixelRatio || 1;
+    this.renderer.setPixelRatio(q === 'low' ? Math.min(dpr, 1) : q === 'medium' ? Math.min(dpr, 1.5) : Math.min(dpr, 2));
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    const sun = this.arena.sun;
+    const size = q === 'high' ? 2048 : 1024;
+    sun.castShadow = q !== 'low';
+    if (sun.shadow.mapSize.x !== size) {
+      sun.shadow.map?.dispose();
+      sun.shadow.map = null;
+      sun.shadow.mapSize.set(size, size);
+    }
+  }
+
+  /** Show the main menu with the fighters idling in the background. */
+  mainMenu() {
     this.restart();
+    this.phase = 'menu';
+    this.hud.setVisible(false);
+    this.touch?.setVisible(false);
+    this.hud.showMessage('');
+    this.menu.show('main', true);
+    this.sfx.setMusicMode('menu');
+  }
+
+  /** START / RESTART: a fresh round. */
+  startFight() {
+    this.menu.close();
+    this.controllers[0].getInput(this.p1, this.p2); // drop presses made while in menus
+    this.hud.setVisible(true);
+    this.touch?.setVisible(true);
+    this.sfx.setMusicMode('fight');
+    this.restart();
+    this.sfx.announce();
+  }
+
+  pause() {
+    if (!['intro', 'fight', 'ko'].includes(this.phase)) return;
+    this.pausedPhase = this.phase;
+    this.phase = 'paused';
+    this.touch?.setVisible(false);
+    this.menu.show('pause', true);
+  }
+
+  resume() {
+    if (this.phase !== 'paused') return;
+    this.phase = this.pausedPhase;
+    this.controllers[0].getInput(this.p1, this.p2); // drop presses made while paused
+    this.touch?.setVisible(true);
   }
 
   restart() {
@@ -91,13 +160,13 @@ export class Game {
     this.hud.showMessage('ROUND 1');
     this.fighters.forEach((f, i) => this.hud.setHealth(i, f.health, f.maxHealth));
     this.cam.update(this.p1, this.p2, STEP, true);
-    this.sfx.announce();
   }
 
   start() {
     this.last = performance.now();
     this.acc = 0;
     const loop = (now) => {
+      this.menu.update(); // gamepad menu navigation
       const dt = Math.min(0.1, (now - this.last) / 1000);
       this.last = now;
       this.acc += dt;
@@ -113,6 +182,7 @@ export class Game {
 
   /** One fixed gameplay frame (60/s). */
   step() {
+    if (this.phase === 'menu' || this.phase === 'paused') return; // game frozen behind the menu
     this.phaseFrame++;
 
     if (this.phase === 'intro') {
@@ -129,7 +199,9 @@ export class Game {
     const fighting = this.phase === 'fight';
     // Player input is always polled so presses don't pile up between rounds.
     const raw1 = this.controllers[0].getInput(this.p1, this.p2);
-    if (raw1.restart && this.phase === 'over') { this.restart(); return; }
+    if (raw1.restart && this.phase === 'over') { this.startFight(); return; }
+    if (raw1.back && this.phase === 'over') { this.mainMenu(); return; }
+    if (raw1.pause && this.phase !== 'over') { this.pause(); return; }
     const in1 = fighting ? raw1 : NEUTRAL;
     const in2 = fighting ? this.controllers[1].getInput(this.p2, this.p1) : NEUTRAL;
 
@@ -146,7 +218,7 @@ export class Game {
       if (this.phaseFrame >= KO_FRAMES) {
         this.phase = 'over';
         this.hud.showMessage('');
-        this.hud.showWinner(this.winner ? `${this.winner.name} WINS` : 'DRAW');
+        this.hud.showWinner(this.winner === this.p1 ? 'YOU WIN' : this.winner ? 'AI WINS' : 'DRAW');
         if (this.winner === this.p1) this.sfx.victory();
         else this.sfx.defeat();
       }
@@ -166,7 +238,7 @@ export class Game {
     const strength = move.damage / 10;
     this.hitstop = Math.max(this.hitstop, move.hitstop || 0);
     this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, move.anim === 'strong' ? 0xff6633 : 0xffdd66);
-    if (move.damage >= 14) this.sfx.heavyHit(); // strong attack / specials
+    if (move.anim === 'strong' || move.anim === 'special') this.sfx.heavyHit();
     else this.sfx.hit(strength);
     if (defender === this.p1) this.sfx.damage();
     this.cam.shake(move.shake || 0.05 * strength);
@@ -189,6 +261,7 @@ export class Game {
     this.cam.update(this.p1, this.p2, dt);
     this.effects.update(dt);
     this.shields.forEach((s) => s.update(dt));
+    this.playerIndicator.mesh.visible = this.phase !== 'menu';
     this.playerIndicator.update(dt);
     this.debug.update(this.fighters);
     this.fighters.forEach((f, i) => {

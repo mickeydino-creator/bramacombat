@@ -1,120 +1,250 @@
 /*
- * Placeholder sounds synthesized with WebAudio (no asset files, nothing to license).
- * Each sound is one small method; to use real samples later, replace a method body
- * with playback of an audio file. Small random pitch variation keeps repeats from sounding robotic.
- * Browsers only allow audio after a key press or click, so sound starts after the first input.
+ * Game audio: all sounds are synthesized with WebAudio (no files to load, nothing that can 404).
+ *
+ * Routing:  each sound -> sfxBus ─┐
+ *           music      -> musicBus ┴-> master -> compressor -> speakers   (+ analyser, for tests)
+ * Volumes come from Settings (master / sfx / music).
+ *
+ * Browsers start audio "suspended" until a user gesture. unlock() is attached to every kind of
+ * gesture (click, touchend, pointerup, keydown...) and keeps retrying until the context is running.
+ * Gamepad presses don't count as gestures in browsers, so pad-only players get sound after the
+ * first click/tap/key (e.g. the START button).
+ *
+ * Each named sound is rate-limited (DEDUPE_SECONDS) so one action can't play it twice.
  */
+import { Music } from './Music.js';
+
 const vary = (amount = 0.08) => 1 + (Math.random() * 2 - 1) * amount;
+const DEDUPE_SECONDS = 0.04;
+const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click', 'keydown'];
 
 export class Sfx {
-  constructor() {
+  constructor(settings) {
     this.ctx = null;
-    this.volume = 0.8; // master volume
-    const unlock = () => {
-      if (!this.ctx) {
-        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-        this.master = this.ctx.createGain();
-        this.master.gain.value = this.volume;
-        this.master.connect(this.ctx.destination);
-      }
-      if (this.ctx.state === 'suspended') this.ctx.resume();
-    };
-    window.addEventListener('keydown', unlock);
-    window.addEventListener('pointerdown', unlock);
+    this.last = {};
+    this.played = {}; // name -> count (debugging / tests)
+    this.volumes = { master: 0.8, sfx: 0.9, music: 0.5 };
+    this.unlock = this.unlock.bind(this);
+    for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, this.unlock, { capture: true, passive: true });
+    settings?.onChange((v) => this.setVolumes(v));
   }
 
-  tone({ freq = 200, endFreq = freq, time = 0.1, type = 'square', volume = 0.15, delay = 0 }) {
+  get running() { return this.ctx?.state === 'running'; }
+
+  /** Create / resume the AudioContext. Safe to call any time; only works inside a user gesture. */
+  unlock() {
+    try {
+      if (!this.ctx) this.create();
+      if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); // retried on the next gesture
+      if (this.running && !this.unlocked) {
+        this.unlocked = true;
+        for (const ev of UNLOCK_EVENTS) window.removeEventListener(ev, this.unlock, { capture: true });
+        this.music.start();
+      }
+    } catch (e) {
+      console.warn('Audio unavailable:', e);
+    }
+  }
+
+  create() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) throw new Error('WebAudio not supported');
+    // iOS: play through the silent switch like a game would.
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* ignore */ }
+    const ctx = new AC({ latencyHint: 'interactive' });
+    this.ctx = ctx;
+    this.comp = ctx.createDynamicsCompressor();
+    this.comp.threshold.value = -14; this.comp.knee.value = 10; this.comp.ratio.value = 4;
+    this.comp.attack.value = 0.002; this.comp.release.value = 0.15;
+    this.master = ctx.createGain();
+    this.sfxBus = ctx.createGain();
+    this.musicBus = ctx.createGain();
+    this.analyser = ctx.createAnalyser();
+    this.analyser.fftSize = 1024;
+    this.sfxBus.connect(this.master);
+    this.musicBus.connect(this.master);
+    this.master.connect(this.comp);
+    this.comp.connect(ctx.destination);
+    this.comp.connect(this.analyser);
+    // One shared noise buffer (1s) instead of generating noise for every sound.
+    const len = ctx.sampleRate;
+    this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = this.noiseBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.music = new Music(ctx, this.musicBus, this.noiseBuf);
+    this.applyVolumes();
+    ctx.addEventListener?.('statechange', () => { if (this.running) this.unlock(); });
+  }
+
+  setVolumes(v) {
+    this.volumes = { master: v.master, sfx: v.sfx, music: v.music };
+    this.applyVolumes();
+  }
+
+  applyVolumes() {
     if (!this.ctx) return;
-    const t = this.ctx.currentTime + delay;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const t = this.ctx.currentTime;
+    this.master.gain.setTargetAtTime(this.volumes.master, t, 0.02);
+    this.sfxBus.gain.setTargetAtTime(this.volumes.sfx, t, 0.02);
+    this.musicBus.gain.setTargetAtTime(this.volumes.music * 0.6, t, 0.02);
+  }
+
+  /** Music mood: 'menu' (soft, filtered) or 'fight'. */
+  setMusicMode(mode) { this.music?.setMode(mode); }
+
+  /** Current output level (0..1), used by the audio test. */
+  level() {
+    if (!this.analyser) return 0;
+    const buf = new Float32Array(this.analyser.fftSize);
+    this.analyser.getFloatTimeDomainData(buf);
+    let peak = 0;
+    for (const s of buf) peak = Math.max(peak, Math.abs(s));
+    return peak;
+  }
+
+  // ---------- building blocks ----------
+
+  /** Rate-limited play: returns false if this sound just played (prevents double triggers). */
+  gate(name) {
+    if (!this.running) return false;
+    const now = this.ctx.currentTime;
+    if (now - (this.last[name] ?? -1) < DEDUPE_SECONDS) return false;
+    this.last[name] = now;
+    this.played[name] = (this.played[name] || 0) + 1;
+    return true;
+  }
+
+  env(gainNode, t, vol, attack, decay) {
+    gainNode.gain.setValueAtTime(0.0001, t);
+    gainNode.gain.exponentialRampToValueAtTime(vol, t + attack);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+  }
+
+  tone({ freq = 200, endFreq = freq, time = 0.1, type = 'square', volume = 0.2, delay = 0, attack = 0.003, dest }) {
+    const c = this.ctx, t = c.currentTime + delay;
+    const osc = c.createOscillator(), g = c.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, t);
     osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), t + time);
-    gain.gain.setValueAtTime(volume, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + time);
-    osc.connect(gain).connect(this.master);
+    this.env(g, t, volume, attack, time);
+    osc.connect(g).connect(dest || this.sfxBus);
     osc.start(t);
-    osc.stop(t + time);
+    osc.stop(t + attack + time + 0.02);
   }
 
-  noise(time = 0.1, volume = 0.2, filterFreq = 1500, { delay = 0, type = 'lowpass', sweepTo = null } = {}) {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime + delay;
-    const len = Math.floor(this.ctx.sampleRate * time);
-    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = type;
-    filter.frequency.setValueAtTime(filterFreq, t);
-    if (sweepTo) filter.frequency.exponentialRampToValueAtTime(sweepTo, t + time);
-    const gain = this.ctx.createGain();
-    gain.gain.value = volume;
-    src.connect(filter).connect(gain).connect(this.master);
-    src.start(t);
+  noise({ time = 0.1, volume = 0.3, freq = 1500, endFreq = null, type = 'lowpass', q = 1, delay = 0, attack = 0.002 }) {
+    const c = this.ctx, t = c.currentTime + delay;
+    const src = c.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const f = c.createBiquadFilter();
+    f.type = type; f.Q.value = q;
+    f.frequency.setValueAtTime(freq, t);
+    if (endFreq) f.frequency.exponentialRampToValueAtTime(endFreq, t + time);
+    const g = c.createGain();
+    this.env(g, t, volume, attack, time);
+    src.connect(f).connect(g).connect(this.sfxBus);
+    src.start(t, Math.random() * 0.5);
+    src.stop(t + attack + time + 0.02);
   }
 
-  // ---- attacks (on attack start) ----
-  /** Plays the whoosh for an attack/action name: punch | kick | strong | special. */
+  // ---------- attacks (on attack start) ----------
+  /** Whoosh for an attack/action name: punch | kick | strong | special. */
   attack(name) {
     if (name === 'punch') this.punch();
     else if (name === 'kick') this.kick();
     else if (name === 'strong') this.strong();
     else if (name === 'special') this.special();
-    else this.swing();
   }
-  swing() { this.noise(0.08, 0.08, 2500); }
-  punch() { this.noise(0.07, 0.12, 3000 * vary(), { type: 'bandpass', sweepTo: 1200 }); }
-  kick() { this.noise(0.12, 0.15, 1800 * vary(), { type: 'bandpass', sweepTo: 700 }); }
+  punch() {
+    if (!this.gate('punch')) return;
+    this.noise({ time: 0.09, volume: 0.35, freq: 2600 * vary(), endFreq: 900, type: 'bandpass', q: 1.2 });
+  }
+  kick() {
+    if (!this.gate('kick')) return;
+    this.noise({ time: 0.15, volume: 0.4, freq: 1600 * vary(), endFreq: 450, type: 'bandpass', q: 1.4 });
+  }
   strong() {
-    this.noise(0.22, 0.2, 900 * vary(), { type: 'bandpass', sweepTo: 3000 });
-    this.tone({ freq: 110, endFreq: 70, time: 0.2, type: 'sawtooth', volume: 0.05 });
+    if (!this.gate('strong')) return;
+    this.noise({ time: 0.28, volume: 0.45, freq: 500 * vary(), endFreq: 2600, type: 'bandpass', q: 1.5, attack: 0.05 });
+    this.tone({ freq: 110, endFreq: 65, time: 0.25, type: 'sawtooth', volume: 0.12, attack: 0.04 });
   }
   special() {
-    this.tone({ freq: 220 * vary(), endFreq: 880, time: 0.3, type: 'sawtooth', volume: 0.09 });
-    this.tone({ freq: 330 * vary(), endFreq: 1320, time: 0.3, type: 'square', volume: 0.04, delay: 0.03 });
-    this.noise(0.3, 0.12, 600, { type: 'bandpass', sweepTo: 4000 });
+    if (!this.gate('special')) return;
+    this.tone({ freq: 180 * vary(), endFreq: 900, time: 0.32, type: 'sawtooth', volume: 0.18, attack: 0.02 });
+    this.tone({ freq: 270 * vary(), endFreq: 1350, time: 0.32, type: 'square', volume: 0.08, attack: 0.02, delay: 0.02 });
+    this.noise({ time: 0.35, volume: 0.3, freq: 500, endFreq: 5000, type: 'bandpass', q: 2, attack: 0.03 });
   }
 
-  // ---- impacts ----
+  // ---------- impacts ----------
   hit(strength = 1) {
-    this.noise(0.1 + 0.05 * strength, 0.35, (1400 + 400 * strength) * vary());
-    this.tone({ freq: 200 * vary(), endFreq: 70, time: 0.1, type: 'sine', volume: 0.3 });
+    if (!this.gate('hit')) return;
+    this.noise({ time: 0.09, volume: 0.6, freq: 3200 * vary(), type: 'highpass', q: 0.7 }); // crack
+    this.noise({ time: 0.14, volume: 0.6, freq: (900 + 300 * strength) * vary(), type: 'lowpass' }); // body
+    this.tone({ freq: 190 * vary(), endFreq: 60, time: 0.12, type: 'sine', volume: 0.7 }); // thump
   }
   heavyHit() {
-    this.noise(0.3, 0.5, 700 * vary());
-    this.tone({ freq: 120 * vary(), endFreq: 35, time: 0.35, type: 'sine', volume: 0.5 });
-    this.tone({ freq: 80, endFreq: 40, time: 0.25, type: 'square', volume: 0.08 });
+    if (!this.gate('heavyHit')) return;
+    this.noise({ time: 0.12, volume: 0.7, freq: 2500 * vary(), type: 'highpass' });
+    this.noise({ time: 0.35, volume: 0.8, freq: 700 * vary(), endFreq: 200, type: 'lowpass' });
+    this.tone({ freq: 140 * vary(), endFreq: 35, time: 0.4, type: 'sine', volume: 0.9 });
+    this.tone({ freq: 90, endFreq: 40, time: 0.25, type: 'square', volume: 0.15 });
   }
   block() {
-    this.noise(0.08, 0.2, 3500);
-    this.tone({ freq: 900 * vary(0.04), endFreq: 600, time: 0.06, type: 'square', volume: 0.06 });
+    if (!this.gate('block')) return;
+    this.tone({ freq: 1250 * vary(0.03), endFreq: 1100, time: 0.12, type: 'square', volume: 0.12 });
+    this.tone({ freq: 1870 * vary(0.03), endFreq: 1700, time: 0.1, type: 'triangle', volume: 0.12 });
+    this.noise({ time: 0.07, volume: 0.35, freq: 4000, type: 'highpass' });
   }
   guardBreak() {
-    this.noise(0.25, 0.4, 2500, { type: 'bandpass', sweepTo: 300 });
-    this.tone({ freq: 500, endFreq: 120, time: 0.3, type: 'square', volume: 0.1 });
+    if (!this.gate('guardBreak')) return;
+    this.noise({ time: 0.3, volume: 0.6, freq: 3000, endFreq: 300, type: 'bandpass', q: 1.5 });
+    this.tone({ freq: 520, endFreq: 110, time: 0.35, type: 'square', volume: 0.18 });
   }
-  /** Player took damage: short low "grunt". */
+  /** Player took damage: short "grunt". */
   damage() {
-    this.tone({ freq: 160 * vary(), endFreq: 90, time: 0.16, type: 'sawtooth', volume: 0.07, delay: 0.02 });
+    if (!this.gate('damage')) return;
+    this.tone({ freq: 170 * vary(), endFreq: 95, time: 0.18, type: 'sawtooth', volume: 0.16, delay: 0.03, attack: 0.01 });
+    this.tone({ freq: 340 * vary(), endFreq: 190, time: 0.14, type: 'triangle', volume: 0.08, delay: 0.03, attack: 0.01 });
   }
 
-  // ---- movement ----
-  jump() { this.tone({ freq: 300 * vary(), endFreq: 500, time: 0.08, type: 'triangle', volume: 0.05 }); }
-  land() { this.noise(0.06, 0.12, 400 * vary()); }
+  // ---------- movement ----------
+  jump() {
+    if (!this.gate('jump')) return;
+    this.tone({ freq: 280 * vary(), endFreq: 620, time: 0.1, type: 'triangle', volume: 0.22 });
+    this.noise({ time: 0.07, volume: 0.12, freq: 1200, type: 'bandpass' });
+  }
+  land() {
+    if (!this.gate('land')) return;
+    this.noise({ time: 0.08, volume: 0.35, freq: 500 * vary(), type: 'lowpass' });
+    this.tone({ freq: 110, endFreq: 60, time: 0.08, type: 'sine', volume: 0.3 });
+  }
 
-  // ---- round ----
-  ko() { this.tone({ freq: 220, endFreq: 40, time: 0.9, type: 'sawtooth', volume: 0.15 }); }
-  announce() { this.tone({ freq: 440, endFreq: 880, time: 0.25, type: 'square', volume: 0.08 }); }
+  // ---------- round ----------
+  ko() {
+    if (!this.gate('ko')) return;
+    this.tone({ freq: 220, endFreq: 40, time: 0.9, type: 'sawtooth', volume: 0.25 });
+    this.noise({ time: 0.6, volume: 0.4, freq: 900, endFreq: 100, type: 'lowpass' });
+  }
+  announce() {
+    if (!this.gate('announce')) return;
+    this.tone({ freq: 440, endFreq: 880, time: 0.22, type: 'square', volume: 0.14 });
+    this.tone({ freq: 660, endFreq: 1320, time: 0.22, type: 'triangle', volume: 0.1 });
+  }
   victory() {
-    [523, 659, 784, 1047].forEach((f, i) =>
-      this.tone({ freq: f, time: i === 3 ? 0.5 : 0.14, type: 'square', volume: 0.07, delay: i * 0.13 }));
+    if (!this.gate('victory')) return;
+    [523, 659, 784, 1047].forEach((f, i) => {
+      this.tone({ freq: f, time: i === 3 ? 0.6 : 0.14, type: 'square', volume: 0.14, delay: i * 0.13 });
+      this.tone({ freq: f * 2, time: i === 3 ? 0.6 : 0.14, type: 'triangle', volume: 0.06, delay: i * 0.13 });
+    });
   }
   defeat() {
+    if (!this.gate('defeat')) return;
     [392, 330, 262, 196].forEach((f, i) =>
-      this.tone({ freq: f, endFreq: f * 0.97, time: i === 3 ? 0.7 : 0.22, type: 'triangle', volume: 0.12, delay: i * 0.22 }));
+      this.tone({ freq: f, endFreq: f * 0.97, time: i === 3 ? 0.8 : 0.24, type: 'triangle', volume: 0.22, delay: i * 0.24 }));
+  }
+  /** UI click for menus. */
+  ui() {
+    if (!this.gate('ui')) return;
+    this.tone({ freq: 900, endFreq: 1200, time: 0.05, type: 'triangle', volume: 0.12 });
   }
 }

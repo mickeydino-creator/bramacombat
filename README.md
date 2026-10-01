@@ -13,12 +13,17 @@ Open the URL Vite prints (http://localhost:5173). `npm run build` creates a stat
 
 ## Controls
 
-Keyboard: A / D move, W jump, J punch, K kick, L strong attack, I special, hold Shift block, R restart, H show hitboxes (debug).
+The game opens on a main menu (START / HOW TO PLAY / SETTINGS). Menus work with mouse/touch, keyboard
+(arrows + Enter, Esc = back) and gamepad (D-pad/stick + A, B = back). In the fight the player is **YOU**, the opponent **AI**.
 
-Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y strong attack, RB special, hold RT block, Menu/Start or A restart (winner screen only). Press any button once if the browser doesn't detect the pad right away.
+- Keyboard: A / D move, W jump, J punch, K kick, L strong attack, I special, hold Shift block, Esc pause, R restart, H hitboxes (debug).
+- Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y strong attack, RB special, hold RT block,
+  Start pause. Winner screen: A/Start restart, B main menu. Press any button once if the pad isn't detected right away.
+- Touch (phones/tablets, shown only on touch devices, best in landscape): hold the big left/right pads to move,
+  JUMP, P (punch), K (kick), STR (strong), hold BLK (block), SP (special), II (top) pause.
 
-Touch (phones/tablets, shown only on touch devices, best in landscape): hold the left/right pad to move,
-JUMP, P (punch), K (kick), STR (strong), hold BLK (block), SP (special). Tap RESTART on the winner screen.
+Settings (saved in the browser): master / SFX / music volume, fullscreen, graphics quality (low/medium/high).
+Audio is synthesized with WebAudio (`src/audio/Sfx.js`, music in `src/audio/Music.js`) and starts after the first click/tap/key.
 
 ## Project layout
 
@@ -38,7 +43,9 @@ JUMP, P (punch), K (kick), STR (strong), hold BLK (block), SP (special). Tap RES
 - `src/input/GamepadController.js` - gamepad bindings (Gamepad API, deadzone, press detection)
 - `src/input/TouchController.js` - on-screen touch buttons (touch devices only)
 - `src/input/CombinedController.js` - merges keyboard + gamepad + touch into one player input
-- `src/core/Game.js` - loop (fixed 60 steps/s), round flow, hitstop, effects/sound hooks
+- `src/core/Game.js` - loop (fixed 60 steps/s), round flow (menu / intro / fight / pause / KO), hitstop, effects/sound hooks
+- `src/core/Settings.js` - saved settings (volumes, graphics)
+- `src/ui/Menu.js` - main menu, how to play, settings, pause
 - `src/camera`, `src/arena`, `src/ui`, `src/fx`, `src/audio` - camera, stage, HUD, hit sparks, generated sound effects (`src/audio/Sfx.js`)
 
 ## Characters

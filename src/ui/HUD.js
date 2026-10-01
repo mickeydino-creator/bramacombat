@@ -1,6 +1,6 @@
-/** Minimal HTML overlay: health bars, center messages, winner screen with restart. */
+/** In-fight HTML overlay: health / stamina / special bars, messages, pause button, winner screen. */
 export class HUD {
-  constructor(onRestart) {
+  constructor({ onRestart, onMainMenu, onPause }) {
     const el = document.createElement('div');
     el.className = 'hud';
     el.innerHTML = `
@@ -9,8 +9,9 @@ export class HUD {
         <div class="bar-wrap p2"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div><div class="meter-label stamina-label"><span class="meter-name">STAMINA</span></div><div class="meter special"><div class="meter-fill"></div></div><div class="meter-label special-label"><span class="meter-name">SPECIAL</span><span class="special-name"></span><span class="special-state"></span><span class="meter-key"></span></div></div>
       </div>
       <div class="message"></div>
-      <div class="overlay"><div class="winner"></div><button type="button">RESTART</button></div>
-      <div class="help">A/D move &nbsp; W jump &nbsp; J punch &nbsp; K kick &nbsp; L strong &nbsp; I special &nbsp; Shift block &nbsp;|&nbsp; Pad: stick move, A jump, X punch, B kick, Y strong, RB special, RT block, Start restart &nbsp;|&nbsp; R restart &nbsp; H hitboxes</div>`;
+      <button type="button" class="pause-btn" aria-label="Pause">II</button>
+      <div class="overlay"><div class="winner"></div><div class="overlay-buttons"><button type="button" data-act="restart" class="primary">RESTART</button><button type="button" data-act="menu">MAIN MENU</button></div></div>
+      <div class="help">ESC / START &nbsp;pause &nbsp;|&nbsp; controls: HOW TO PLAY in the menu</div>`;
     document.body.appendChild(el);
     this.el = el;
     this.bars = ['.p1', '.p2'].map((s) => ({
@@ -30,7 +31,9 @@ export class HUD {
     this.message = el.querySelector('.message');
     this.overlay = el.querySelector('.overlay');
     this.winner = el.querySelector('.winner');
-    el.querySelector('button').addEventListener('click', (e) => { e.currentTarget.blur(); onRestart(); });
+    el.querySelector('[data-act=restart]').addEventListener('click', (e) => { e.currentTarget.blur(); onRestart(); });
+    el.querySelector('[data-act=menu]').addEventListener('click', (e) => { e.currentTarget.blur(); onMainMenu(); });
+    el.querySelector('.pause-btn').addEventListener('click', (e) => { e.currentTarget.blur(); onPause(); });
   }
 
   setNames(a, b) { this.bars[0].name.textContent = a; this.bars[1].name.textContent = b; }
@@ -84,6 +87,9 @@ export class HUD {
   }
 
   showMessage(text) { this.message.textContent = text; }
+  /** Hidden while a menu covers the game. */
+  setVisible(v) { this.el.classList.toggle('hidden', !v); }
+
   showWinner(text) { this.winner.textContent = text; this.overlay.classList.add('show'); }
   hideWinner() { this.overlay.classList.remove('show'); }
 }

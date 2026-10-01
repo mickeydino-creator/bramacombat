@@ -96,6 +96,8 @@ export class TouchController {
     el.addEventListener('pointercancel', end);
   }
 
+  setVisible(v) { this.root.classList.toggle('hidden', !v); }
+
   /** Dim the SP button while the special meter is recharging (visual hint only). */
   setSpecialReady(ready) { this.specialBtn.classList.toggle('ready', ready); }
 

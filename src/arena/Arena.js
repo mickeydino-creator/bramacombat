@@ -65,4 +65,6 @@ export function createArena(scene) {
     b.receiveShadow = true;
     scene.add(b);
   }
+
+  return { sun };
 }
