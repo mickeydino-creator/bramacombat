@@ -27,3 +27,18 @@ canvas { display: block; }
 
 .help { position: absolute; bottom: 12px; width: 100%; text-align: center; font-family: monospace; font-size: 13px;
   color: rgba(255, 255, 255, 0.65); }
+
+/* Special ability cooldown indicator (under player 1's health bar) */
+.abilities { position: absolute; top: 92px; left: 24px; display: flex; gap: 12px; }
+.ability { display: flex; align-items: center; gap: 8px; }
+.ability-icon { position: relative; width: 52px; height: 52px; border-radius: 50%; border: 3px solid #666;
+  background: conic-gradient(rgba(255, 140, 40, 0.75) calc(var(--progress, 1) * 360deg), #222 0);
+  display: flex; align-items: center; justify-content: center; filter: grayscale(0.7); opacity: 0.8; }
+.ability-time { font-size: 22px; text-shadow: 2px 2px 0 #000; }
+.ability-key { position: absolute; bottom: -8px; right: -8px; font-family: monospace; font-size: 11px;
+  background: #000; border: 1px solid #888; padding: 1px 4px; }
+.ability-label { font-size: 14px; letter-spacing: 1px; color: #999; text-shadow: 1px 1px 0 #000; }
+.ability.ready .ability-icon { border-color: #ffd23f; filter: none; opacity: 1; background: radial-gradient(#ffb347, #e0521f);
+  box-shadow: 0 0 14px rgba(255, 180, 60, 0.9); animation: ability-pulse 1s ease-in-out infinite; }
+.ability.ready .ability-label { color: #ffd23f; }
+@keyframes ability-pulse { 50% { box-shadow: 0 0 4px rgba(255, 180, 60, 0.4); } }

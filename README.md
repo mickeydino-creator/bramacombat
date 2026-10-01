@@ -13,9 +13,9 @@ Open the URL Vite prints (http://localhost:5173). `npm run build` creates a stat
 
 ## Controls
 
-Keyboard: A / D move, W jump, J punch, K kick, L strong attack, R restart, H show hitboxes (debug).
+Keyboard: A / D move, W jump, J punch, K kick, L strong attack, I special, R restart, H show hitboxes (debug).
 
-Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y strong attack, Menu/Start or A restart (winner screen only). Press any button once if the browser doesn't detect the pad right away.
+Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y strong attack, RB special, Menu/Start or A restart (winner screen only). Press any button once if the browser doesn't detect the pad right away.
 
 ## Project layout
 
@@ -25,6 +25,7 @@ Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y st
 - `src/combat/CombatSystem.js` - hitbox vs hurtbox detection, push collision
 - `src/models/PlaceholderModel.js` - primitive humanoid (current visuals) + the model interface
 - `src/models/GltfModel.js` - ready-made adapter for your own `.glb` characters with animations
+- `src/abilities/SpecialAbilities.js` - special ability cooldowns (abilities + cooldown seconds are set per character in `characters.js`)
 - `src/ai/AIController.js` - opponent AI
 - `src/input/KeyboardController.js` - key bindings
 - `src/input/GamepadController.js` - gamepad bindings (Gamepad API, deadzone, press detection)

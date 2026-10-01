@@ -159,6 +159,7 @@ export class Game {
     this.cam.update(this.p1, this.p2, dt);
     this.effects.update(dt);
     this.debug.update(this.fighters);
+    this.hud.setAbilities(this.p1.specials.status(), { special: 'I / RB' });
     this.renderer.render(this.scene, this.cam.camera);
   }
 }

@@ -1,6 +1,7 @@
 import {
   STEP, GRAVITY, ARENA_HALF_WIDTH, GROUND_FRICTION, INPUT_BUFFER_FRAMES,
 } from '../config/constants.js';
+import { SpecialAbilities } from '../abilities/SpecialAbilities.js';
 
 // Fighter body size used for the hurtbox (the area that can be hit).
 const HURT_HALF_WIDTH = 0.35;
@@ -22,6 +23,7 @@ export class Fighter {
     this.maxHealth = def.maxHealth;
     this.jumpVelocity = Math.sqrt(2 * -GRAVITY * def.jumpHeight);
 
+    this.specials = new SpecialAbilities(def.specials);
     this.model = def.createModel();
     scene.add(this.model.root);
 
@@ -42,6 +44,7 @@ export class Fighter {
     this.hitstun = 0;
     this.cooldowns = {};
     this.buffer = null; // { action, frames }
+    this.specials.reset();
     this.time = 0;
     this.model.reset?.();
   }
@@ -69,9 +72,12 @@ export class Fighter {
     this.time += STEP;
     this.stateFrame++;
     for (const k in this.cooldowns) if (this.cooldowns[k] > 0) this.cooldowns[k]--;
+    this.specials.update();
 
     // Remember attack presses for a few frames so inputs during recovery aren't lost.
-    if (input.actions.length) this.buffer = { action: input.actions[0], frames: INPUT_BUFFER_FRAMES };
+    // Special presses during their cooldown are ignored entirely.
+    const actions = input.actions.filter((a) => !this.specials.has(a) || this.specials.isReady(a));
+    if (actions.length) this.buffer = { action: actions[0], frames: INPUT_BUFFER_FRAMES };
     else if (this.buffer && --this.buffer.frames <= 0) this.buffer = null;
 
     switch (this.state) {
@@ -127,8 +133,11 @@ export class Fighter {
   }
 
   tryAttack(name) {
-    const move = this.def.moves[name];
+    const special = this.specials.has(name);
+    if (special && !this.specials.isReady(name)) return false;
+    const move = special ? this.specials.getMove(name) : this.def.moves[name];
     if (!move || (this.cooldowns[name] || 0) > 0) return false;
+    if (special) this.specials.trigger(name); // cooldown starts on activation
     this.attack = {
       name,
       move,

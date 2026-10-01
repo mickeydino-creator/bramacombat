@@ -10,7 +10,7 @@
 
 // Standard mapping button indices: 0 A, 1 B, 2 X, 3 Y, 9 Menu/Start, 12-15 D-pad up/down/left/right
 export const DEFAULT_GAMEPAD_BINDINGS = {
-  actions: { 2: 'punch', 1: 'kick', 3: 'strong' }, // X, B, Y
+  actions: { 2: 'punch', 1: 'kick', 3: 'strong', 5: 'special' }, // X, B, Y, RB
   jump: [0, 12], // A, D-pad up
   left: [14], // D-pad left
   right: [15], // D-pad right

@@ -20,8 +20,12 @@ import { PlaceholderModel } from '../models/PlaceholderModel.js';
  *   lunge     - forward speed applied when the attack becomes active
  *   anim      - animation name the model plays (see models/PlaceholderModel.js / GltfModel.js)
  *
- * Adding a special move: add an entry to `moves` (e.g. `special: {...}`) and bind a key
- * to the action name in src/input/KeyboardController.js (ACTION_KEYS).
+ * SPECIAL ABILITIES (`specials`): same frame data as normal moves, plus
+ *   label     - name shown on the HUD
+ *   cooldown  - seconds before it can be used again; starts as soon as it activates
+ * The key in `specials` is the action name; bind it in src/input/KeyboardController.js
+ * (ACTION_KEYS) and src/input/GamepadController.js (actions). Cooldown logic:
+ * src/abilities/SpecialAbilities.js.
  */
 
 const BASE_MOVES = {
@@ -60,6 +64,20 @@ export const CHARACTERS = {
     damageMultiplier: 1.0,
     attackSpeed: 1.0, // >1 = faster startup/recovery, <1 = slower
     moves: BASE_MOVES,
+    specials: {
+      special: {
+        label: 'FLAME RUSH',
+        cooldown: 5,
+        move: {
+          anim: 'punch',
+          startup: 10, active: 6, recovery: 20, cooldown: 0,
+          damage: 14,
+          hitbox: { x: 0.9, y: 1.2, w: 1.0, h: 0.8 },
+          knockback: { x: 9, y: 4 },
+          hitstun: 26, hitstop: 9, lunge: 9, shake: 0.25,
+        },
+      },
+    },
     // Replace this with your own model, e.g.:
     //   createModel: () => new GltfModel({ url: '/models/ember.glb', scale: 1 }),
     createModel: () => new PlaceholderModel({ color: 0xd9532b, accent: 0xffd23f, skin: 0xe8b48a }),
@@ -73,6 +91,20 @@ export const CHARACTERS = {
     damageMultiplier: 1.05,
     attackSpeed: 0.95,
     moves: BASE_MOVES,
+    specials: {
+      special: {
+        label: 'THUNDER KNEE',
+        cooldown: 7,
+        move: {
+          anim: 'kick',
+          startup: 14, active: 6, recovery: 22, cooldown: 0,
+          damage: 16,
+          hitbox: { x: 1.0, y: 1.0, w: 1.1, h: 1.0 },
+          knockback: { x: 6, y: 10 },
+          hitstun: 30, hitstop: 10, lunge: 5, shake: 0.3,
+        },
+      },
+    },
     createModel: () => new PlaceholderModel({ color: 0x2f7fd8, accent: 0x7cf2ff, skin: 0xa8784f }),
   },
 };

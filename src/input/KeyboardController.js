@@ -6,6 +6,7 @@ const ACTION_KEYS = {
   KeyJ: 'punch',
   KeyK: 'kick',
   KeyL: 'strong',
+  KeyI: 'special',
 };
 const LEFT = ['KeyA', 'ArrowLeft'];
 const RIGHT = ['KeyD', 'ArrowRight'];
