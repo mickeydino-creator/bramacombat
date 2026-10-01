@@ -123,7 +123,9 @@ export class PlaceholderModel {
     p.lLeg = -0.3; p.rLeg = 0.3;
     p.hipY = 0.92 + Math.sin(t * 4) * 0.015;
 
-    switch (f.animState) {
+    // Animations this simple model doesn't have fall back to a similar one.
+    const ALIAS = { run: 'walk', fall: 'jump', land: 'idle', special: 'strong' };
+    switch (ALIAS[f.animState] || f.animState) {
       case 'walk': {
         const s = Math.sin(t * 11);
         p.lLeg = -0.3 + s * 0.45; p.rLeg = 0.3 - s * 0.45;

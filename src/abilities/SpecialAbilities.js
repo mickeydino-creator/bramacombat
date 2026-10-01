@@ -40,10 +40,13 @@ export class SpecialAbilities {
     this.remaining[name] = Math.round(this.defs[name].cooldown * FPS);
   }
 
+  /** Spend stamina for something else (e.g. blocking). */
+  spend(amount) { this.stamina = Math.max(0, this.stamina - amount); }
+
   /** Called once per fixed step. */
-  update() {
+  update(regen = true) {
     for (const name in this.remaining) if (this.remaining[name] > 0) this.remaining[name]--;
-    this.stamina = Math.min(this.maxStamina, this.stamina + this.regenPerFrame);
+    if (regen) this.stamina = Math.min(this.maxStamina, this.stamina + this.regenPerFrame);
   }
 
   /** For the HUD: stamina meter + per-ability readiness. */

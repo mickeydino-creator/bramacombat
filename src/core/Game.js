@@ -47,13 +47,18 @@ export class Game {
     this.shields = this.fighters.map((f) => new BlockShield(this.scene, f));
     // Player 1 = keyboard + first gamepad, merged into one input.
     const player1 = new CombinedController([new KeyboardController(), new GamepadController()]);
-    this.controllers = [player1, new AIController({ aggression: 0.55 })];
+    this.controllers = [player1, new AIController({ aggression: 0.7 })];
     this.hud.setNames(this.p1.name, this.p2.name);
 
     for (const f of this.fighters) {
       f.on('attackStart', (a) => this.sfx.attack(a.name));
       f.on('jump', () => this.sfx.jump());
       f.on('land', () => this.sfx.land());
+      f.on('guardBreak', () => {
+        this.sfx.guardBreak();
+        this.effects.hitSpark(f.x + f.facing * 0.4, f.y + 1.2, 1.2, 0xff4444);
+        this.cam.shake(0.15);
+      });
     }
 
     window.addEventListener('resize', () => {
@@ -176,8 +181,8 @@ export class Game {
     this.effects.update(dt);
     this.shields.forEach((s) => s.update(dt));
     this.debug.update(this.fighters);
-    this.hud.setStamina(0, this.p1.specials.status(), 'I / RB');
-    this.hud.setStamina(1, this.p2.specials.status());
+    this.hud.setStamina(0, this.p1.specials.status(), 'I / RB', this.p1.guardBroken);
+    this.hud.setStamina(1, this.p2.specials.status(), '', this.p2.guardBroken);
     this.renderer.render(this.scene, this.cam.camera);
   }
 }

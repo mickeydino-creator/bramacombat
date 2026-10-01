@@ -69,7 +69,7 @@ export class AIController {
       this.setPlan(Math.random() < 0.7 ? 'retreat' : 'footsie', randInt(20, 40));
     }
     this.wasHit = hitNow;
-    if (hitNow) this.blockTimer = 0; // too late, got hit: drop the block
+    if (hitNow || self.guardBroken) this.blockTimer = 0; // got hit / guard broken: drop the block
 
     // Holding block: keep it up (also through blockstun) until the timer runs out.
     if (this.blockTimer > 0) {
@@ -89,7 +89,9 @@ export class AIController {
     if (oppAttack && oppAttack !== this.lastSeenAttack) {
       this.lastSeenAttack = oppAttack;
       const r = Math.random();
-      if (dist < 2.2 && r < this.blockChance) {
+      // Blocking costs stamina: don't try when low (same rules as the player).
+      const canBlock = !self.guardBroken && self.specials.stamina > 20;
+      if (dist < 2.2 && canBlock && r < this.blockChance) {
         this.blockDelay = randInt(...this.blockReaction);
         this.blockTimer = randInt(...this.blockHold);
       } else if (dist < 2.2 && r < this.blockChance + this.defense) {
@@ -195,15 +197,25 @@ export class AIController {
     const reach = move.hitbox.x + move.hitbox.w / 2 + 0.35 + (move.lunge || 0) * 0.09;
     if (dist > reach * 0.9 || opponent.y > 0.6) return false; // out of range or high in the air
     if (opponent.blocking || opponent.state === 'blockstun') return Math.random() < 0.1; // would be blocked
+    // If the player is mid-attack, only go for it when their recovery outlasts our startup.
+    if (opponent.state === 'attack' && this.framesLeft(opponent) < self.frames(move.startup)) return false;
     return true;
+  }
+
+  /** Frames until the opponent's current attack ends (0 if not attacking). */
+  framesLeft(opponent) {
+    const a = opponent.attack;
+    return a ? a.startup + a.active + a.recovery - a.frame : 0;
   }
 
   pickAttack(self, opponent, dist) {
     const strongReady = (self.cooldowns.strong || 0) <= 0;
     const punishing = opponent.state === 'attack' && opponent.attackPhase === 'recovery';
     const pressured = opponent.state === 'attack' || this.avoidTimer > 0;
-    // Slow strong attack mostly as a punish, rarely as a raw attack.
-    if (strongReady && (punishing ? Math.random() < 0.5 : !pressured && Math.random() < 0.12)) return 'strong';
+    // Slow strong attack as a punish only when the player's recovery is long enough, rarely raw.
+    const strongFits = this.framesLeft(opponent) > self.frames(self.def.moves.strong.startup);
+    if (strongReady && (punishing ? strongFits && Math.random() < 0.6 : !pressured && Math.random() < 0.12)) return 'strong';
+    if (punishing) return dist > 1.45 ? 'kick' : 'punch'; // short window: fastest move that reaches
     if (dist > 1.45) return Math.random() < 0.8 ? 'kick' : 'punch'; // punch barely reaches here
     // Under pressure, prefer the fast punch so it doesn't get interrupted.
     return Math.random() < (pressured ? 0.85 : 0.55) ? 'punch' : 'kick';

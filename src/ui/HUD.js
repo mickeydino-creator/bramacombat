@@ -43,7 +43,7 @@ export class HUD {
    * `status` comes from SpecialAbilities.status(); `keyLabel` is the button hint (optional).
    * Glows when the (first) special ability is ready; a tick marks its cost if it's less than full.
    */
-  setStamina(i, status, keyLabel = '') {
+  setStamina(i, status, keyLabel = '', guardBroken = false) {
     const b = this.bars[i];
     const ability = status.abilities[0];
     const pct = Math.max(0, Math.min(1, status.stamina / status.max)) * 100;
@@ -51,6 +51,7 @@ export class HUD {
     const ready = !!ability?.ready;
     b.meter.classList.toggle('ready', ready);
     b.meterLabel.classList.toggle('ready', ready);
+    b.meter.classList.toggle('broken', guardBroken); // ran out from blocking: can't block until it refills a bit
     if (ability && b.meterName.textContent !== ability.label) {
       b.meterName.textContent = ability.label;
       b.meterKey.textContent = keyLabel;

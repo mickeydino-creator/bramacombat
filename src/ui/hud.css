@@ -42,3 +42,5 @@ canvas { display: block; }
 .meter-key { margin-left: 8px; font-family: monospace; font-size: 11px; background: #000; border: 1px solid #666; padding: 0 4px; }
 .meter-key:empty { display: none; }
 @keyframes meter-pulse { 50% { box-shadow: 0 0 0 2px #000, 0 0 12px rgba(120, 230, 255, 0.9); } }
+.meter.broken { border-color: #ff5a5a; }
+.meter.broken .meter-fill { background: linear-gradient(#ff8a7a, #c0302a); }

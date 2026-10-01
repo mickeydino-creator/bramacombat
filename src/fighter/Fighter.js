@@ -1,8 +1,10 @@
 import {
   STEP, GRAVITY, ARENA_HALF_WIDTH, GROUND_FRICTION, INPUT_BUFFER_FRAMES,
   BLOCK_DAMAGE_MULTIPLIER, BLOCK_MOVE_SPEED, BLOCKSTUN_MULTIPLIER, BLOCK_PUSHBACK,
+  BLOCK_STAMINA_DRAIN_PER_SECOND, BLOCK_HIT_STAMINA_COST, GUARD_RECOVER_STAMINA,
 } from '../config/constants.js';
 import { SpecialAbilities } from '../abilities/SpecialAbilities.js';
+import { createModel } from '../models/createModel.js';
 
 // Fighter body size used for the hurtbox (the area that can be hit).
 const HURT_HALF_WIDTH = 0.35;
@@ -17,6 +19,7 @@ const HURT_HEIGHT = 1.85;
  *
  * States: idle | walk | air | attack | hitstun | blockstun | ko | victory
  * `blocking` is true while block is held on the ground (state stays idle/walk).
+ * Blocking drains stamina; at 0 the guard breaks (no blocking until stamina recovers).
  */
 export class Fighter {
   constructor(def, scene) {
@@ -26,7 +29,8 @@ export class Fighter {
     this.jumpVelocity = Math.sqrt(2 * -GRAVITY * def.jumpHeight);
 
     this.specials = new SpecialAbilities(def.specials, def.stamina);
-    this.model = def.createModel();
+    // Model: either a custom factory or built from the character's `appearance` data.
+    this.model = def.createModel ? def.createModel(def) : createModel(def.appearance);
     scene.add(this.model.root);
 
     this.listeners = {};
@@ -45,6 +49,9 @@ export class Fighter {
     this.attack = null; // { name, move, frame, hasHit }
     this.hitstun = 0;
     this.blocking = false;
+    this.guardBroken = false;
+    this.landFrames = 0; // short landing animation
+    this.runFrames = 0; // frames spent walking forward (switches walk -> run animation)
     this.cooldowns = {};
     this.buffer = null; // { action, frames }
     this.specials.reset();
@@ -75,7 +82,9 @@ export class Fighter {
     this.time += STEP;
     this.stateFrame++;
     for (const k in this.cooldowns) if (this.cooldowns[k] > 0) this.cooldowns[k]--;
-    this.specials.update();
+    this.specials.update(!this.blocking); // stamina doesn't recharge while blocking
+    if (this.landFrames > 0) this.landFrames--;
+    if (this.guardBroken && this.specials.stamina >= GUARD_RECOVER_STAMINA) this.guardBroken = false;
 
     // Remember attack presses for a few frames so inputs during recovery aren't lost.
     // Special presses during their cooldown are ignored entirely.
@@ -88,7 +97,7 @@ export class Fighter {
     switch (this.state) {
       case 'blockstun':
         // Still blocking while held; becomes free when blockstun ends.
-        this.blocking = !!input.block;
+        this.blocking = !!input.block && !this.guardBroken;
         if (this.grounded) this.vx *= GROUND_FRICTION;
         if (--this.hitstun <= 0) this.setState('idle');
         break;
@@ -111,11 +120,12 @@ export class Fighter {
         this.updateFree(input, opponent);
     }
 
+    if (this.blocking) this.drainGuard(BLOCK_STAMINA_DRAIN_PER_SECOND * STEP);
     this.updatePhysics();
   }
 
   updateFree(input, opponent) {
-    this.blocking = !!input.block && this.grounded && !input.jump;
+    this.blocking = !!input.block && this.grounded && !input.jump && !this.guardBroken;
 
     // Auto-face the opponent while on the ground. Not while blocking, so a
     // cross-up (opponent jumping over you) hits from behind.
@@ -147,6 +157,8 @@ export class Fighter {
 
     if (!this.grounded || this.vy > 0) this.setState('air');
     else this.setState(Math.abs(this.vx) > 0.1 ? 'walk' : 'idle');
+    const forward = this.state === 'walk' && Math.sign(this.vx) === this.facing && Math.abs(this.vx) > this.def.walkSpeed * 0.8;
+    this.runFrames = forward ? this.runFrames + 1 : 0;
   }
 
   tryAttack(name) {
@@ -216,6 +228,7 @@ export class Fighter {
       this.vy = 0;
       if (wasAirborne) {
         this.emit('land');
+        this.landFrames = 8;
         if (this.state === 'air') this.setState('idle');
         // Landing cancels aerial attacks.
         if (this.state === 'attack' && this.attack && this.stateFrame > 2) this.endAttack();
@@ -275,6 +288,7 @@ export class Fighter {
       this.hitstun = Math.max(1, Math.round(move.hitstun * BLOCKSTUN_MULTIPLIER));
       this.state = 'blockstun';
       this.stateFrame = 0;
+      this.drainGuard(raw * BLOCK_HIT_STAMINA_COST); // blocked hits cost stamina
       return damage; // no red flash on block
     } else {
       this.blocking = false;
@@ -287,18 +301,31 @@ export class Fighter {
     return damage;
   }
 
+  /** Spend stamina for blocking; breaks the guard when it runs out. */
+  drainGuard(amount) {
+    this.specials.spend(amount);
+    if (this.specials.stamina <= 0 && !this.guardBroken) {
+      this.guardBroken = true;
+      this.blocking = false;
+      this.emit('guardBreak');
+    }
+  }
+
   setVictory() { if (this.state !== 'ko') { this.attack = null; this.setState('victory'); } }
 
   /**
    * Single animation name derived from gameplay state. Models only need to
-   * understand these names: idle, walk, jump, punch, kick, strong, hit, block, ko, victory.
+   * understand these names: idle, walk, run, jump, fall, land, punch, kick, strong, special,
+   * hit, block, ko (defeat), victory. Attack names come from each move's `anim`.
    */
   get animState() {
     if (this.blocking || this.state === 'blockstun') return 'block';
     switch (this.state) {
       case 'attack': return this.attack.move.anim;
-      case 'air': return 'jump';
+      case 'air': return this.vy > 0 ? 'jump' : 'fall';
       case 'hitstun': return 'hit';
+      case 'walk': return this.landFrames > 0 ? 'land' : this.runFrames > 20 ? 'run' : 'walk';
+      case 'idle': return this.landFrames > 0 ? 'land' : 'idle';
       default: return this.state;
     }
   }

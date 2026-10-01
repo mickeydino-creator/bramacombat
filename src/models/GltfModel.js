@@ -17,8 +17,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const DEFAULT_CLIPS = {
   idle: 'Idle', walk: 'Walk', jump: 'Jump', punch: 'Punch', kick: 'Kick',
   strong: 'Strong', hit: 'Hit', block: 'Block', ko: 'KO', victory: 'Victory',
+  run: 'Run', fall: 'Fall', land: 'Land', special: 'Special',
 };
-const ONE_SHOT = new Set(['punch', 'kick', 'strong', 'hit', 'ko', 'victory', 'jump']);
+// Used when a clip is missing.
+const FALLBACK = { run: 'walk', fall: 'jump', land: 'idle', special: 'strong' };
+const ONE_SHOT = new Set(['punch', 'kick', 'strong', 'special', 'hit', 'ko', 'victory', 'jump', 'land']);
 
 export class GltfModel {
   constructor({ url, scale = 1, rotationY = 0, clips = {} }) {
@@ -53,7 +56,7 @@ export class GltfModel {
   }
 
   play(state) {
-    const next = this.actions[state] || this.actions.idle;
+    const next = this.actions[state] || this.actions[FALLBACK[state]] || this.actions.idle;
     if (!next || next === this.current) return;
     next.reset().play();
     if (this.current) next.crossFadeFrom(this.current, 0.08, false);

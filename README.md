@@ -19,11 +19,13 @@ Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y st
 
 ## Project layout
 
-- `src/config/characters.js` - **character definitions**: stats, move frame data, which model to use
-- `src/config/constants.js` - gravity, arena width, input buffer, round timings, block tuning (chip damage, speed, blockstun)
+- `src/config/characters.js` - **character configuration**: stats, moves, specials, appearance (see Characters below)
+- `src/config/constants.js` - gravity, arena width, input buffer, round timings, block tuning (chip damage, speed, blockstun, stamina drain, guard break)
 - `src/fighter/Fighter.js` - fighter state machine, physics, attacks, getting hit
 - `src/combat/CombatSystem.js` - hitbox vs hurtbox detection, push collision
-- `src/models/PlaceholderModel.js` - primitive humanoid (current visuals) + the model interface
+- `src/models/StickmanModel.js` + `src/models/stickman/` - rigged stickman model, procedural poses, face, accessories
+- `src/models/createModel.js` - builds a fighter's model from its `appearance`
+- `src/models/PlaceholderModel.js` - primitive humanoid + the model interface description
 - `src/models/GltfModel.js` - ready-made adapter for your own `.glb` characters with animations
 - `src/abilities/SpecialAbilities.js` - special ability stamina + cooldowns (`stamina: { max, regenPerSecond }`, `staminaCost`, `cooldown` are set per character in `characters.js`)
 - `src/ai/AIController.js` - opponent AI
@@ -33,10 +35,32 @@ Xbox / standard gamepad: left stick or D-pad move, A jump, X punch, B kick, Y st
 - `src/core/Game.js` - loop (fixed 60 steps/s), round flow, hitstop, effects/sound hooks
 - `src/camera`, `src/arena`, `src/ui`, `src/fx`, `src/audio` - camera, stage, HUD, hit sparks, generated sound effects (`src/audio/Sfx.js`)
 
-## Replacing a placeholder character
+## Characters
 
-1. Put your model in `public/models/ember.glb`.
-2. In `src/config/characters.js`, uncomment the `GltfModel` import and set
-   `createModel: () => new GltfModel({ url: '/models/ember.glb', clips: { idle: 'Idle', punch: 'Punch' /* ... */ } })`.
+All fighters are data in **`src/config/characters.js`**. `defineFighter({...})` deep-merges your values over
+`BASE_FIGHTER`, so a new fighter only lists what's different: name, health, walk speed, jump height,
+damage multiplier, attack speed, stamina, special ability (damage, stamina cost, cooldown, frame data)
+and `appearance` (model file, colors, face, accessories). A copy-paste template is at the bottom of the file.
+Pick who fights in `src/core/Game.js`.
 
-The model should face +Z with its feet at y = 0. Gameplay (hitboxes, physics) does not depend on the model.
+- Model: put a rigged humanoid `.glb` (Mixamo-style bone names, T-pose is fine) in `public/models/` and set
+  `appearance.url`. No animation clips are needed - poses are procedural (`src/models/stickman/poses.js`).
+- Face: `appearance.face = { texture: '/faces/name.png' }` (image in `public/faces/`) or a generated face
+  (`src/models/stickman/face.js`).
+- Accessories: `appearance.accessories = [{ type: 'headband' | 'belt' | 'wristbands' | 'custom', color }]`
+  (`src/models/stickman/accessories.js`).
+- Other model kinds: `appearance.type = 'gltf'` (own animation clips, `GltfModel.js`) or `'placeholder'`;
+  see `src/models/createModel.js`.
+
+## Balance
+
+Normal attacks are the main damage source; blocking is a defensive tool; specials are a limited opportunity.
+Blocking lets 40% of damage through, drains stamina while held and on every blocked hit, stops stamina
+regeneration, and breaks at 0 stamina (no blocking until it refills to 25). Specials share the same stamina.
+Block tuning is in `src/config/constants.js`; per-fighter values in `characters.js`. The AI follows the same rules.
+
+## Credits
+
+"Stickman - Mixamo Rig (2025/2026)" by Robloxian Models
+(https://sketchfab.com/3d-models/stickman-mixamo-rig-20252026-0a00e15ca71d400e905e6f4d5a862fb0),
+licensed under CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/). Used as `public/models/stickman.glb`.

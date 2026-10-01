@@ -93,6 +93,10 @@ export class Sfx {
     this.noise(0.08, 0.2, 3500);
     this.tone({ freq: 900 * vary(0.04), endFreq: 600, time: 0.06, type: 'square', volume: 0.06 });
   }
+  guardBreak() {
+    this.noise(0.25, 0.4, 2500, { type: 'bandpass', sweepTo: 300 });
+    this.tone({ freq: 500, endFreq: 120, time: 0.3, type: 'square', volume: 0.1 });
+  }
   /** Player took damage: short low "grunt". */
   damage() {
     this.tone({ freq: 160 * vary(), endFreq: 90, time: 0.16, type: 'sawtooth', volume: 0.07, delay: 0.02 });
