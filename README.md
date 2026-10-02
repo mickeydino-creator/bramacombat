@@ -49,7 +49,8 @@ UI: `src/ui/hud.css`. Study-desk props (pencils, markers, erasers, paper balls, 
 In a free-for-all everybody can hit everybody (an attack hits the closest fighter it touches), every AI picks its own target
 (close or hurt fighters, whoever hit it - not only YOU), and the last fighter standing wins the match (one round, no best-of-3).
 The podium ranks fighters by knock-out order (last one down = 2nd, ...). HUD: YOU keep the full bars; each opponent gets one slim
-health bar with its color dot on the right. Everything is table-driven in `src/config/modes.js` (fighters, arena width, spawn points,
+health bar with its color dot on the right. If YOU are knocked out while the AIs fight on, a SKIP button (Enter / gamepad A also work) fast-forwards the rest of the fight with the same rules. With 4 fighters, 4th place gets a hole that opens under them on the podium and they fall through the page.
+Everything is table-driven in `src/config/modes.js` (fighters, arena width, spawn points,
 rounds to win, camera range) - add an entry there for another player count or arena size. Extra characters (colors) are in
 `src/config/characters.js`; AI targeting is `AIController.chooseTarget`; the arena resizes via `arena.setHalfWidth()`.
 

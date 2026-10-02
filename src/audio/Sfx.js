@@ -213,7 +213,7 @@ export class Sfx {
    * or if a sound file replaced it (then the file is played instead).
    */
   gate(name, sampleDelay = 0) {
-    if (!this.running) return false;
+    if (!this.running || this.suppress) return false; // suppress: set while a fight is fast-forwarded (SKIP)
     const now = this.ctx.currentTime;
     if (now - (this.last[name] ?? -1) < DEDUPE_SECONDS) return false;
     this.last[name] = now;
@@ -478,6 +478,13 @@ export class Sfx {
     this.noise({ time: 0.34, volume: 0.2, freq: 700, endFreq: 3800, type: 'bandpass', q: 0.9, attack: 0.05 });
     this.noise({ time: 0.3, volume: 0.09, freq: 5200, endFreq: 2600, type: 'highpass', q: 0.5, attack: 0.08, delay: 0.1 });
     for (let i = 0; i < 5; i++) this.noise({ time: 0.025, volume: 0.1, freq: 3200 + Math.random() * 2500, type: 'bandpass', q: 2, delay: 0.12 + Math.random() * 0.28 });
+  }
+  /** Falling through the floor (4th place on the podium): a whistle that slides down, then a soft thump. */
+  fall() {
+    if (!this.gate('fall')) return;
+    this.tone({ freq: 760, endFreq: 140, time: 0.62, type: 'sine', volume: 0.2, attack: 0.02 });
+    this.tone({ freq: 380, endFreq: 70, time: 0.62, type: 'triangle', volume: 0.1, attack: 0.02 });
+    this.tone({ freq: 90, endFreq: 40, time: 0.25, type: 'sine', volume: 0.35, delay: 0.62 });
   }
   /** "FIGHT!" stinger. */
   announce() {

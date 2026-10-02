@@ -12,7 +12,7 @@ function setClass(el, name, on) {
   if (el[k] !== on) { el[k] = on; el.classList.toggle(name, on); }
 }
 export class HUD {
-  constructor({ onRestart, onMainMenu, onPause, showOpponentMeters = false }) {
+  constructor({ onRestart, onMainMenu, onPause, onSkip = () => {}, showOpponentMeters = false }) {
     const el = document.createElement('div');
     el.className = showOpponentMeters ? 'hud' : 'hud hide-opponent';
     el.innerHTML = `
@@ -23,6 +23,7 @@ export class HUD {
       </div>
       <div class="message"></div>
       <button type="button" class="pause-btn" aria-label="Pause">II</button>
+      <button type="button" class="skip-btn" aria-label="Skip to the end of the fight">SKIP &#9654;&#9654;</button>
       <div class="overlay"><div class="banner"><div class="brand">DOODLE BRAWL</div><div class="winner"></div></div><div class="overlay-buttons"><button type="button" data-act="restart" class="primary">RESTART</button><button type="button" data-act="menu">MAIN MENU</button></div></div>`;
     document.body.appendChild(el);
     this.el = el;
@@ -51,6 +52,8 @@ export class HUD {
     this.winner = el.querySelector('.winner');
     el.querySelector('[data-act=restart]').addEventListener('click', (e) => { e.currentTarget.blur(); onRestart(); });
     el.querySelector('[data-act=menu]').addEventListener('click', (e) => { e.currentTarget.blur(); onMainMenu(); });
+    el.querySelector('.skip-btn').addEventListener('click', (e) => { e.currentTarget.blur(); onSkip(); });
+    this.skipBtn = el.querySelector('.skip-btn');
     el.querySelector('.pause-btn').addEventListener('click', (e) => { e.currentTarget.blur(); onPause(); });
   }
 
@@ -144,6 +147,9 @@ export class HUD {
 
   /** Round wins as pips next to the names (best of 3: first to ROUNDS_TO_WIN). */
   setWins(i, wins) { this.bars[i]?.pips.forEach((p, k) => p.classList.toggle('on', k < wins)); }
+
+  /** SKIP button: shown while YOU are knocked out and the others are still fighting. */
+  setSkipVisible(v) { setClass(this.skipBtn, 'show', v); }
 
   /** Fade the bars out/in (e.g. while the arena turns into the podium). */
   setBarsVisible(v) { this.el.classList.toggle('dim', !v); }

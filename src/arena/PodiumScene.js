@@ -116,6 +116,31 @@ export class PodiumScene {
     ], 23));
     this.root.add(this.decor);
 
+    // The hole that opens under the 4th-place fighter (hand-drawn dark ellipse on the page)
+    const hc = document.createElement('canvas');
+    hc.width = 256; hc.height = 180;
+    const hg = hc.getContext('2d');
+    hg.lineCap = 'round';
+    hg.fillStyle = '#17171f'; hg.beginPath(); hg.ellipse(128, 90, 112, 72, 0, 0, Math.PI * 2); hg.fill();
+    hg.strokeStyle = 'rgba(255,255,255,0.12)'; hg.lineWidth = 3;
+    for (let i = 0; i < 9; i++) { hg.beginPath(); hg.moveTo(40 + i * 22, 40); hg.lineTo(26 + i * 22, 140); hg.stroke(); } // pencil hatching inside
+    hg.strokeStyle = PALETTE.ink; hg.lineWidth = 7;
+    for (let pass = 0; pass < 2; pass++) { // wobbly double pen outline
+      hg.beginPath();
+      for (let a = 0; a <= Math.PI * 2 + 0.2; a += 0.2) {
+        const x = 128 + Math.cos(a) * (112 + Math.random() * 5), y = 90 + Math.sin(a) * (72 + Math.random() * 4);
+        if (a === 0) hg.moveTo(x, y); else hg.lineTo(x, y);
+      }
+      hg.stroke();
+    }
+    const holeTex = canvasTexture(hc);
+    this.textures.push(holeTex);
+    this.hole = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.34), new THREE.MeshBasicMaterial({ map: holeTex, transparent: true, depthWrite: false }));
+    this.hole.rotation.x = -Math.PI / 2;
+    this.hole.position.set(PODIUM_LAYOUTS.crowd.slots[3].x, GROUND + 0.016, 0);
+    this.hole.renderOrder = 3;
+    this.root.add(this.hole);
+
     // paper scraps that flutter up while the page rearranges
     this.scraps = [];
     const geo = new THREE.PlaneGeometry(0.4, 0.52);
@@ -151,6 +176,13 @@ export class PodiumScene {
 
   reset() {
     this.setProgress(0);
+    this.setHole(0);
+  }
+
+  /** The hole under the 4th place: 0 = closed, 1 = fully open (it grows from its center). */
+  setHole(p) {
+    this.hole.visible = p > 0;
+    this.hole.scale.setScalar(Math.max(1e-3, p * (2 - p))); // ease-out
   }
 
   setProgress(t) {

@@ -331,3 +331,12 @@ body.touch .help { display: none; }
   .opp .onm { font-size: 13px; min-width: 30px; }
   .opp .odot { width: 10px; height: 10px; border-width: 2px; }
 }
+
+/* SKIP: shown when YOU are out of a free-for-all and the AIs fight on */
+.skip-btn { display: none; position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 18px); transform: translateX(-50%) rotate(-2deg); z-index: 6;
+  pointer-events: auto; cursor: pointer; font: 26px/1 var(--marker); letter-spacing: 1px; padding: 9px 24px; color: var(--paper); background: var(--red);
+  border: 3px solid var(--ink); border-radius: var(--sketch); box-shadow: 4px 4px 0 rgba(37, 37, 46, 0.45); -webkit-tap-highlight-color: transparent; }
+.skip-btn.show { display: block; animation: skip-pop 0.35s cubic-bezier(.2, 1.6, .5, 1) both; }
+@keyframes skip-pop { from { opacity: 0; transform: translateX(-50%) rotate(-8deg) scale(0.5); } to { opacity: 1; transform: translateX(-50%) rotate(-2deg) scale(1); } }
+.skip-btn:hover { transform: translateX(-50%) rotate(-3deg) scale(1.05); }
+@media (max-height: 500px) { .skip-btn { font-size: 18px; padding: 6px 16px; bottom: calc(env(safe-area-inset-bottom) + 10px); } }

@@ -46,6 +46,7 @@ export class Game {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.localClippingEnabled = true; // the 4th-place fighter sinks into the podium hole through a clip plane
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
@@ -57,7 +58,8 @@ export class Game {
     this.cam = new FightCamera(window.innerWidth / window.innerHeight);
     this.effects = new Effects(this.scene);
     this.sfx = new Sfx(this.settings);
-    this.hud = new HUD({ onRestart: () => this.startFight(), onMainMenu: () => this.mainMenu(), onPause: () => this.pause() });
+    this.hud = new HUD({ onRestart: () => this.startFight(), onMainMenu: () => this.mainMenu(), onPause: () => this.pause(), onSkip: () => this.skipFight() });
+    this.floorClip = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.3); // keeps everything above the page (y >= -0.3)
     this.debug = new DebugBoxes(this.scene);
 
     // ---- Fighters: all possible fighters exist from the start (characters: see ROSTER in src/config/modes.js);
@@ -103,6 +105,7 @@ export class Game {
         this.pause();
         e.stopImmediatePropagation(); // the menu that just opened must not also handle this Esc (= resume)
       }
+      else if (e.code === 'Enter' && this.skipAvailable()) this.skipFight();
       else if (e.code === 'KeyR' || (e.code === 'Enter' && this.phase === 'over')) this.startFight();
       if (e.code === 'KeyH') this.debug.toggle();
     });
@@ -117,6 +120,7 @@ export class Game {
     // Compile every shader now and pre-draw the effect textures in idle time (no first-hit stutter).
     this.renderer.compile(this.scene, this.cam.camera);
     this.podiumScene.prime(this.renderer, this.cam.camera); // podium shaders/textures too: no hitch at the first transition
+    this.setClip(this.p1, this.floorClip); this.renderer.compile(this.scene, this.cam.camera); this.setClip(this.p1, null); // clipped-material shader variant
     this.effects.prewarm(this.renderer);
   }
 
@@ -264,6 +268,8 @@ export class Game {
     this.fighters.forEach((f, i) => f.reset(this.mode.spawns[i], 1));
     for (const f of this.fighters) f.facing = Math.sign(this.nearestEnemy(f).x - f.x) || 1; // everybody starts facing the nearest opponent
     this.downOrder = []; // knocked-out fighters in order (decides the podium places)
+    this.fallAnim = null;
+    for (const f of this.fighters) { this.setClip(f, null); f.model.root.visible = true; } // (the 4th place may have fallen through the page)
     this.playerIndicator?.snap();
     this.controllers.forEach((c) => c.reset?.());
     this.phase = 'intro';
@@ -301,6 +307,7 @@ export class Game {
   /** One fixed gameplay frame (60/s). */
   step() {
     if (this.phase === 'menu' || this.phase === 'paused') return; // game frozen behind the menu
+    if (this.skipRequested) { this.skipRequested = false; this.runSkip(); return; }
     this.phaseFrame++;
     if (this.phase === 'podium' || this.phase === 'over') { this.stepPodium(); return; }
 
@@ -319,6 +326,7 @@ export class Game {
     // Player input is always polled so presses don't pile up between rounds.
     const raw1 = this.controllers[0].getInput(this.p1, this.nearestEnemy(this.p1));
     if (raw1.pause && this.phase !== 'over') { this.pause(); return; }
+    if (raw1.restart && this.skipAvailable()) { this.skipFight(); return; } // gamepad A / Start
 
     // Every fighter gets its own input and its own target (the opponent it faces). AIs choose theirs in a free-for-all.
     const ffa = this.fightCount > 2;
@@ -390,6 +398,7 @@ export class Game {
     if (this.phase === 'over') {
       if (raw1.restart) this.startFight();
       else if (raw1.back) this.mainMenu();
+      else this.stepFall();
       return;
     }
     const f = this.phaseFrame;
@@ -406,6 +415,60 @@ export class Game {
       if (t >= 0.92) fighter.state = p.final;
     }
     if (t >= 1) this.finishMatch();
+  }
+
+  /** Clip a fighter's model at the page (floorClip) or remove the clipping (null). */
+  setClip(fighter, plane) {
+    fighter.model.root.traverse((o) => {
+      if (!o.material) return;
+      for (const m of [].concat(o.material)) {
+        m.clippingPlanes = plane ? [plane] : null;
+        m.clipShadows = !!plane;
+        m.needsUpdate = true;
+      }
+    });
+  }
+
+  /** 4th place: after the podium is complete a hole opens under them, they drop and sink into it. */
+  stepFall() {
+    const fall = this.fallAnim;
+    if (!fall) return;
+    const f = fall.fighter, n = ++fall.frame;
+    const HOLE_AT = 45, OPEN = 18, DROP_AT = HOLE_AT + OPEN + 12;
+    this.podiumScene.setHole(Math.min(1, Math.max(0, (n - HOLE_AT) / OPEN)));
+    if (n === DROP_AT) {
+      this.setClip(f, this.floorClip); // only what is above the page stays visible: the body disappears into the hole
+      f.state = 'air'; f.vy = -1.5; f.attack = null;
+      this.sfx.fall();
+    }
+    if (n > DROP_AT && f.model.root.visible) {
+      f.vy -= 16 * STEP;
+      f.y += f.vy * STEP;
+      if (f.y < -3.6) f.model.root.visible = false;
+    }
+  }
+
+  /** SKIP is offered when YOU are out of a free-for-all and the AIs are still fighting. */
+  skipAvailable() { return this.fightCount > 2 && this.phase === 'fight' && !this.p1.alive; }
+
+  skipFight() { if (this.skipAvailable()) this.skipRequested = true; }
+
+  /** Fast-forward the rest of the fight (same rules, no rendering/sound in between) until the winner is decided. */
+  runSkip() {
+    this.sfx.suppress = true;
+    try {
+      for (let n = 0; this.phase === 'fight' && n < 60 * 600; n++) this.step();
+    } finally {
+      this.sfx.suppress = false;
+    }
+    this.effects.clear(); // sparks and word bursts from the skipped part
+    this.cam.shakeTime = 0; this.cam.shakeAmount = 0; this.cam.kickAmount = 0;
+    const [l, r, y] = this.camView();
+    this.cam.update(l, r, STEP, true, y);
+    if (this.phase === 'ko') { // the final K.O. happened while muted: play its cues now
+      this.sfx.ko();
+      if (!this.sfx.hasSample('ko')) this.sfx.say('K. O.');
+    }
   }
 
   beginPodium() {
@@ -437,6 +500,8 @@ export class Game {
   finishMatch() {
     this.phase = 'over';
     this.phaseFrame = 0;
+    // 4th place (4 fighters): a hole opens under them and they fall through the page
+    this.fallAnim = this.fightCount === 4 ? { fighter: this.podiumMoves[3].fighter, frame: 0 } : null;
     this.hud.showWinner(this.winner === this.p1 ? 'YOU WIN' : `${this.names[this.fighters.indexOf(this.winner)]} WINS`, true);
     if (this.winner === this.p1) { this.sfx.victory(); this.sfx.say('You win!'); }
     else { this.sfx.defeat(); if (!this.sfx.hasSample('defeat')) this.sfx.say('You lose'); }
@@ -514,7 +579,8 @@ export class Game {
     this.effects.update(dt);
     this.arena.update(dt);
     this.shields.forEach((s) => s.update(dt));
-    this.playerIndicator.mesh.visible = this.phase !== 'menu';
+    this.playerIndicator.mesh.visible = this.phase !== 'menu' && this.p1.model.root.visible;
+    this.hud.setSkipVisible(this.skipAvailable());
     this.playerIndicator.update(dt);
     this.debug.update(this.fighters);
     this.fighters.forEach((f, i) => {

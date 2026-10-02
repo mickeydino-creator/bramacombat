@@ -100,6 +100,12 @@ export class Effects {
     idle(run);
   }
 
+  /** Remove every running effect (after a fast-forward). */
+  clear() {
+    for (const it of this.items) { this.scene.remove(it.obj); it.obj.material.dispose(); }
+    this.items.length = 0;
+  }
+
   update(dt) {
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
