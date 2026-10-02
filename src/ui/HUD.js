@@ -1,8 +1,8 @@
 /** In-fight HTML overlay: health / stamina / special bars, messages, pause button, winner screen. */
 export class HUD {
-  constructor({ onRestart, onMainMenu, onPause }) {
+  constructor({ onRestart, onMainMenu, onPause, showOpponentMeters = false }) {
     const el = document.createElement('div');
-    el.className = 'hud';
+    el.className = showOpponentMeters ? 'hud' : 'hud hide-opponent';
     el.innerHTML = `
       <div class="bars">
         <div class="bar-wrap p1"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div><div class="meter-label stamina-label"><span class="meter-name">STAMINA</span></div><div class="meter special"><div class="meter-fill"></div></div><div class="meter-label special-label"><span class="meter-name">SPECIAL POWER</span><span class="special-name"></span><span class="special-state"></span><span class="meter-key"></span></div></div>

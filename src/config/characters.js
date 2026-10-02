@@ -58,12 +58,13 @@ const BASE_MOVES = {
     hitstun: 15, hitstop: 4, lunge: 1.0,
   },
   kick: {
+    // A normal attack: a bit more damage and reach than the punch, far below the strong attack (14).
     anim: 'kick',
     startup: 9, active: 4, recovery: 15, cooldown: 6,
-    damage: 9,
+    damage: 7, // was 9
     hitbox: { x: 1.0, y: 0.85, w: 0.95, h: 0.5 },
-    knockback: { x: 5.5, y: 2.5 },
-    hitstun: 19, hitstop: 6, lunge: 1.5,
+    knockback: { x: 3.8, y: 0.8 }, // was { x: 5.5, y: 2.5 } - no more launch
+    hitstun: 17, hitstop: 5, lunge: 1.2,
   },
   // strong: the STRONG ATTACK is the shared special - see src/abilities/specials.js
 };

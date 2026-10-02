@@ -21,6 +21,12 @@ import { Music } from './Music.js';
 
 const vary = (amount = 0.08) => 1 + (Math.random() * 2 - 1) * amount;
 const DEDUPE_SECONDS = 0.04;
+// Normal-hit variations (Hz): low thump start, body filter, faint slap
+const HIT_VARIANTS = [
+  { thump: 140, body: 900, snap: 1100 },
+  { thump: 125, body: 780, snap: 950 },
+  { thump: 155, body: 1000, snap: 1250 },
+];
 const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click', 'keydown'];
 
 export class Sfx {
@@ -30,7 +36,12 @@ export class Sfx {
     this.played = {}; // name -> count (debugging / tests)
     this.volumes = { master: 0.8, sfx: 0.9, music: 0.5 };
     this.unlock = this.unlock.bind(this);
+    // Listeners stay attached for the whole session: browsers (especially iOS) can suspend/interrupt
+    // audio later (app switch, lock screen, call, background tab) and it can only resume in a gesture.
     for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, this.unlock, { capture: true, passive: true });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && this.ctx && !this.running) this.ctx.resume().catch(() => {}); });
+    // Download sound files right away (decoding needs the AudioContext, which needs a gesture).
+    this.sampleFiles = this.fetchSamples();
     settings?.onChange((v) => { this.setVolumes(v); this.voiceOn = v.voice !== false; });
     this.voiceOn = true;
   }
@@ -41,15 +52,24 @@ export class Sfx {
   unlock() {
     try {
       if (!this.ctx) this.create();
-      if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); // retried on the next gesture
-      if (this.running && !this.unlocked) {
-        this.unlocked = true;
-        for (const ev of UNLOCK_EVENTS) window.removeEventListener(ev, this.unlock, { capture: true });
-        this.music.start();
+      if (this.ctx.state !== 'running') {
+        this.ctx.resume().then(() => this.onRunning()).catch(() => {}); // retried on the next gesture
+        // iOS only unlocks when a sound actually starts inside the gesture: play one silent sample.
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+        src.connect(this.ctx.destination);
+        src.start(0);
       }
+      if (this.running) this.onRunning();
     } catch (e) {
       console.warn('Audio unavailable:', e);
     }
+  }
+
+  onRunning() {
+    if (!this.running) return;
+    this.music?.start();
+    if (!this.samplesDecoded) { this.samplesDecoded = true; this.decodeSamples(); }
   }
 
   create() {
@@ -85,8 +105,7 @@ export class Sfx {
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     this.music = new Music(ctx, this.musicBus, this.noiseBuf);
     this.applyVolumes();
-    this.loadSamples();
-    ctx.addEventListener?.('statechange', () => { if (this.running) this.unlock(); });
+    ctx.addEventListener?.('statechange', () => this.onRunning());
   }
 
   setVolumes(v) {
@@ -117,20 +136,38 @@ export class Sfx {
 
   // ---------- building blocks ----------
 
-  /** Optional sound files from public/sounds/sounds.json (missing manifest = synth only). */
-  async loadSamples() {
-    this.samples = {};
+  /** Download the sound files listed in public/sounds/sounds.json (at page load). name -> ArrayBuffer */
+  async fetchSamples() {
+    const out = {};
     try {
-      const res = await fetch('/sounds/sounds.json', { cache: 'no-cache' });
-      if (!res.ok) return;
+      const base = import.meta.env?.BASE_URL ?? '/';
+      const res = await fetch(`${base}sounds/sounds.json`, { cache: 'no-cache' });
+      if (!res.ok) return out;
       const list = await res.json();
       await Promise.all(Object.entries(list).map(async ([name, file]) => {
         try {
-          const buf = await (await fetch(`/sounds/${file}`)).arrayBuffer();
-          this.samples[name] = await this.ctx.decodeAudioData(buf);
-        } catch (e) { console.warn(`Sound "${name}" (${file}) failed to load`, e); }
+          const r = await fetch(`${base}sounds/${file}`);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          out[name] = await r.arrayBuffer();
+        } catch (e) { console.warn(`Sound "${name}" (${file}) failed to download`, e); }
       }));
-    } catch { /* no manifest */ }
+    } catch { /* no manifest: synthesized sounds only */ }
+    return out;
+  }
+
+  /** Decode the downloaded files once the AudioContext runs (works on old Safari's callback API too). */
+  async decodeSamples() {
+    this.samples = this.samples || {};
+    const files = await this.sampleFiles;
+    await Promise.all(Object.entries(files).map(([name, data]) => new Promise((resolve) => {
+      const ok = (buf) => { this.samples[name] = buf; resolve(); };
+      const fail = (e) => { console.warn(`Sound "${name}" failed to decode`, e); resolve(); };
+      try {
+        const p = this.ctx.decodeAudioData(data.slice(0), ok, fail);
+        p?.catch?.(fail);
+      } catch (e) { fail(e); }
+    })));
+    this.samplesReady = true;
   }
 
   playSample(buf, delay = 0) {
@@ -195,6 +232,7 @@ export class Sfx {
     this.env(g, t, volume, attack, time);
     src.connect(f).connect(g).connect(this.sfxBus);
     if (echo) { const e = c.createGain(); e.gain.value = echo; g.connect(e).connect(this.echoIn); }
+    src.loop = true; // the noise buffer is 1s; long sounds (crowd, crashes) used to cut off early
     src.start(t, Math.random() * 0.5);
     src.stop(t + attack + time + 0.02);
   }
@@ -228,18 +266,25 @@ export class Sfx {
   }
 
   // ---------- impacts ----------
+  /**
+   * Normal hit: a short, soft, low "thud" - a body punch, nothing bright or clicky, so it doesn't
+   * get tiring when repeated. Three slightly different variations are picked at random.
+   */
   hit(strength = 1) {
     if (!this.gate('hit')) return;
-    this.noise({ time: 0.09, volume: 0.6, freq: 3200 * vary(), type: 'highpass', q: 0.7 }); // crack
-    this.noise({ time: 0.14, volume: 0.6, freq: (900 + 300 * strength) * vary(), type: 'lowpass' }); // body
-    this.tone({ freq: 190 * vary(), endFreq: 60, time: 0.12, type: 'sine', volume: 0.7 }); // thump
+    const v = HIT_VARIANTS[Math.floor(Math.random() * HIT_VARIANTS.length)];
+    const s = Math.min(1.3, Math.max(0.7, strength));
+    this.tone({ freq: v.thump * vary(0.05), endFreq: 48, time: 0.09, type: 'sine', volume: 0.55 * s, attack: 0.002 }); // thump
+    this.noise({ time: 0.06, volume: 0.32 * s, freq: v.body * vary(0.06), endFreq: 220, type: 'lowpass', q: 0.6 }); // body
+    this.noise({ time: 0.025, volume: 0.07, freq: v.snap, type: 'bandpass', q: 1.2 }); // a hint of slap, kept soft
   }
+  /** Heavy hit (strong attack): deeper and fuller version of the same thud, slightly longer. */
   heavyHit() {
     if (!this.gate('heavyHit')) return;
-    this.noise({ time: 0.12, volume: 0.7, freq: 2500 * vary(), type: 'highpass' });
-    this.noise({ time: 0.35, volume: 0.8, freq: 700 * vary(), endFreq: 200, type: 'lowpass' });
-    this.tone({ freq: 140 * vary(), endFreq: 35, time: 0.4, type: 'sine', volume: 0.9 });
-    this.tone({ freq: 90, endFreq: 40, time: 0.25, type: 'square', volume: 0.15 });
+    this.tone({ freq: 105 * vary(0.05), endFreq: 38, time: 0.2, type: 'sine', volume: 0.75, attack: 0.002 });
+    this.tone({ freq: 62, endFreq: 34, time: 0.26, type: 'sine', volume: 0.35, attack: 0.005 }); // sub
+    this.noise({ time: 0.12, volume: 0.42, freq: 650 * vary(0.06), endFreq: 160, type: 'lowpass', q: 0.6 });
+    this.noise({ time: 0.04, volume: 0.08, freq: 900, type: 'bandpass', q: 1 });
   }
   block() {
     if (!this.gate('block')) return;

@@ -35,6 +35,8 @@ canvas { display: block; }
 .bars { display: flex; justify-content: space-between; gap: 6vw; padding: calc(env(safe-area-inset-top) + 14px) calc(env(safe-area-inset-right) + 24px) 0 calc(env(safe-area-inset-left) + 24px); }
 .bar-wrap { flex: 1; max-width: 520px; min-width: 0; }
 .bar-wrap.p2 { text-align: right; }
+/* YOU vs AI: only YOU's health / stamina / special power are shown (the AI still has and uses all three). */
+.hud.hide-opponent .p2 .bar, .hud.hide-opponent .p2 .meter, .hud.hide-opponent .p2 .meter-label { display: none; }
 .name { font: 30px/1 var(--marker); margin-bottom: 4px; transform: rotate(-2deg); display: inline-block; }
 .p1 .name { color: var(--blue); }
 .p2 .name { color: var(--red); transform: rotate(2deg); }
