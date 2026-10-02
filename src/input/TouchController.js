@@ -103,7 +103,7 @@ export class TouchController {
   setVisible(v) { this.root.classList.toggle('hidden', !v); }
 
   /** Dim the STR (special) button while the special meter is recharging (visual hint only). */
-  setSpecialReady(ready) { this.specialBtn.classList.toggle('ready', ready); }
+  setSpecialReady(ready) { if (this.specialReady !== ready) { this.specialReady = ready; this.specialBtn.classList.toggle('ready', ready); } }
 
   /** Called once per fixed step. */
   getInput() {

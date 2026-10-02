@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 
 /** Side-view fighting camera: follows the midpoint and zooms out as fighters separate. */
+const _desired = new THREE.Vector3();
+const _look = new THREE.Vector3();
+
 export class FightCamera {
   constructor(aspect) {
     this.camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 200);
@@ -26,8 +29,8 @@ export class FightCamera {
 
     this.kickAmount = (this.kickAmount || 0) * Math.exp(-dt * 7);
     const z = zoom - (this.kickAmount || 0);
-    const desired = new THREE.Vector3(midX, 2.3 + z * 0.08 + midY, z);
-    const look = new THREE.Vector3(midX, 1.1 + midY, 0);
+    const desired = _desired.set(midX, 2.3 + z * 0.08 + midY, z);
+    const look = _look.set(midX, 1.1 + midY, 0);
     const t = snap ? 1 : 1 - Math.exp(-dt * 5);
     this.camera.position.lerp(desired, t);
     this.target.lerp(look, t);

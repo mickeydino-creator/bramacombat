@@ -1,4 +1,16 @@
 /** In-fight HTML overlay: health / stamina / special bars, messages, pause button, winner screen. */
+
+// Bars are updated every frame; writing only real changes (in 0.25% steps) keeps the browser from
+// re-laying out and repainting the HUD on every frame (noticeable on phones).
+const pctStr = (v) => `${Math.round(v * 4) / 4}%`;
+function setWidth(el, value) {
+  const w = pctStr(value);
+  if (el._w !== w) { el._w = w; el.style.width = w; }
+}
+function setClass(el, name, on) {
+  const k = `_c_${name}`;
+  if (el[k] !== on) { el[k] = on; el.classList.toggle(name, on); }
+}
 export class HUD {
   constructor({ onRestart, onMainMenu, onPause, showOpponentMeters = false }) {
     const el = document.createElement('div');
@@ -34,9 +46,9 @@ export class HUD {
   setNames(a, b) { this.bars[0].name.textContent = a; this.bars[1].name.textContent = b; }
 
   setHealth(i, value, max) {
-    const pct = `${Math.max(0, (value / max) * 100)}%`;
-    this.bars[i].fill.style.width = pct;
-    this.bars[i].lag.style.width = pct;
+    const pct = Math.max(0, (value / max) * 100);
+    setWidth(this.bars[i].fill, pct);
+    setWidth(this.bars[i].lag, pct);
   }
 
   /**
@@ -46,20 +58,20 @@ export class HUD {
   setStamina(i, stamina, guardBroken = false) {
     const b = this.bars[i];
     const pct = Math.max(0, Math.min(1, stamina.value / stamina.max)) * 100;
-    b.meterFill.style.width = `${pct}%`;
+    setWidth(b.meterFill, pct);
     // White "spent" chunk: when stamina drops, it stays briefly then shrinks to the new value.
     if (b.lastPct !== undefined && pct < b.lastPct - 0.5) {
-      b.meterLag.classList.remove('draining');
-      b.meterLag.style.width = `${b.lastPct}%`;
+      setClass(b.meterLag, 'draining', false);
+      setWidth(b.meterLag, b.lastPct);
       void b.meterLag.offsetWidth; // restart the transition
-      b.meterLag.classList.add('draining');
-      b.meterLag.style.width = `${pct}%`;
-    } else if (!b.meterLag.classList.contains('draining') || pct > parseFloat(b.meterLag.style.width || '0')) {
-      b.meterLag.classList.remove('draining');
-      b.meterLag.style.width = `${pct}%`;
+      setClass(b.meterLag, 'draining', true);
+      setWidth(b.meterLag, pct);
+    } else if (!b.meterLag._c_draining || pct > parseFloat(b.meterLag._w || '0')) {
+      setClass(b.meterLag, 'draining', false);
+      setWidth(b.meterLag, pct);
     }
     b.lastPct = pct;
-    b.meter.classList.toggle('broken', guardBroken); // ran out from blocking: can't block until it refills a bit
+    setClass(b.meter, 'broken', guardBroken); // ran out from blocking: can't block until it refills a bit
   }
 
   /**
@@ -69,15 +81,15 @@ export class HUD {
   setSpecial(i, status, keyLabel = '', hasStamina = true) {
     const b = this.bars[i];
     const pct = Math.max(0, Math.min(1, status.meter / status.capacity)) * 100;
-    b.specialFill.style.width = `${pct}%`;
+    setWidth(b.specialFill, pct);
     if (b.lastSpecialPct !== undefined && pct < b.lastSpecialPct - 1) {
       b.special.classList.remove('used'); void b.special.offsetWidth; b.special.classList.add('used'); // flash on use
     }
     b.lastSpecialPct = pct;
     // No text labels: the meter itself shows the state (glows when usable, red outline = not enough stamina).
     const usable = status.full && hasStamina;
-    b.special.classList.toggle('ready', usable);
-    b.special.classList.toggle('nostamina', status.full && !hasStamina);
+    setClass(b.special, 'ready', usable);
+    setClass(b.special, 'nostamina', status.full && !hasStamina);
   }
 
   showMessage(text) {

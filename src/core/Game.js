@@ -23,13 +23,24 @@ import { PlayerIndicator } from '../fx/PlayerIndicator.js';
 
 const NEUTRAL = { move: 0, jump: false, actions: [] };
 
+/*
+ * Adaptive resolution: if the device can't keep up (median frame time of the last SAMPLE_FRAMES frames above SLOW_MS,
+ * i.e. below ~45 fps) the render resolution steps down, never below MIN_PIXEL_RATIO.
+ * The graphics-quality setting is the upper limit. It only steps down (with vsync a fast frame
+ * can't be told apart from a barely-fast-enough one), and starts again from the top when the
+ * quality setting changes.
+ */
+const SLOW_MS = 22;
+const SAMPLE_FRAMES = 30;
+const MIN_PIXEL_RATIO = { low: 0.75, medium: 1, high: 1 };
+
 /**
  * Owns the scene, the fixed-timestep loop and the round flow:
  *   intro -> fight -> ko -> over (winner screen) -> restart
  */
 export class Game {
   constructor(container) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
@@ -96,12 +107,19 @@ export class Game {
     });
     this.settings.onChange((v) => this.applyQuality(v.quality));
     this.mainMenu();
+    // Compile every shader now and pre-draw the effect textures in idle time (no first-hit stutter).
+    this.renderer.compile(this.scene, this.cam.camera);
+    this.effects.prewarm(this.renderer);
   }
 
   /** Graphics quality: resolution and shadows (safe to change at runtime). */
   applyQuality(q) {
     const dpr = window.devicePixelRatio || 1;
-    this.renderer.setPixelRatio(q === 'low' ? Math.min(dpr, 1) : q === 'medium' ? Math.min(dpr, 1.5) : Math.min(dpr, 2));
+    this.quality = q;
+    this.maxPixelRatio = q === 'low' ? Math.min(dpr, 1) : q === 'medium' ? Math.min(dpr, 1.5) : Math.min(dpr, 2);
+    this.minPixelRatio = Math.min(this.maxPixelRatio, MIN_PIXEL_RATIO[q] ?? 1);
+    this.frameTimes = [];
+    this.renderer.setPixelRatio(this.maxPixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     const sun = this.arena.sun;
     const size = q === 'high' ? 2048 : 1024;
@@ -110,6 +128,21 @@ export class Game {
       sun.shadow.map?.dispose();
       sun.shadow.map = null;
       sun.shadow.mapSize.set(size, size);
+    }
+  }
+
+  /** Adaptive resolution (see SLOW_MS): called every rendered frame with its duration. */
+  adaptResolution(ms) {
+    const ft = this.frameTimes;
+    if (!ft || document.hidden) return;
+    ft.push(ms);
+    if (ft.length < SAMPLE_FRAMES) return;
+    const median = ft.sort((a, b) => a - b)[ft.length >> 1]; // median: ignores one-off hitches
+    ft.length = 0;
+    const pr = this.renderer.getPixelRatio();
+    if (median > SLOW_MS && pr > this.minPixelRatio + 0.01) {
+      this.renderer.setPixelRatio(Math.max(this.minPixelRatio, pr * 0.8));
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
     }
   }
 
@@ -175,6 +208,7 @@ export class Game {
     const loop = (now) => {
       this.menu.update(); // gamepad menu navigation
       const dt = Math.min(0.1, (now - this.last) / 1000);
+      this.adaptResolution(now - this.last);
       this.last = now;
       this.acc += dt;
       while (this.acc >= STEP) {

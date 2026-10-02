@@ -74,7 +74,7 @@ export function createArena(scene) {
     const h = 1.6 + ((i * 7919) % 5 + 5) % 5 * 0.7;
     const b = inkEdges(new THREE.Mesh(new THREE.BoxGeometry(2.4, h, 1.5), bldgMat), { jitter: 0.03 });
     b.position.set(i * 3.4, h / 2 - 0.3, -12 - Math.abs(i) * 0.3);
-    b.receiveShadow = true;
+    // no receiveShadow: at this sun angle no shadow can reach the backdrop, so skip the shadow lookups
     scene.add(b);
   }
 

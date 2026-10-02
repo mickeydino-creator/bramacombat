@@ -20,6 +20,8 @@ function drawArrow(frame) {
   return t;
 }
 
+const _target = new THREE.Vector3();
+
 export class PlayerIndicator {
   constructor(scene, fighter, { height = 2.45, size = 0.55 } = {}) {
     this.fighter = fighter;
@@ -38,7 +40,7 @@ export class PlayerIndicator {
   update(dt) {
     this.time += dt;
     const f = this.fighter;
-    const target = new THREE.Vector3(f.x, f.y + this.height + Math.sin(this.time * 4) * 0.05, 0);
+    const target = _target.set(f.x, f.y + this.height + Math.sin(this.time * 4) * 0.05, 0);
     this.mesh.position.lerp(target, 1 - Math.exp(-dt * 18)); // smooth follow
     this.mesh.material.map = this.frames[Math.floor(this.time * 7) % 3]; // hand-drawn boil
   }

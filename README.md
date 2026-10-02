@@ -24,6 +24,8 @@ The game opens on a main menu (PLAY / HOW TO PLAY / SETTINGS). PLAY opens the ga
   right side = P (punch), K (kick), STR (strong attack = special), hold BLK (block/shield). II (top) pause.
 
 Settings (saved in the browser): master / SFX / music volume, fullscreen, graphics quality (low/medium/high).
+The graphics quality is the upper limit: on devices that can't keep ~45+ fps the render resolution steps down
+automatically (`adaptResolution` in `src/core/Game.js`). Shaders and effect textures are prepared at startup so the first hit doesn't stutter.
 Audio is synthesized with WebAudio (`src/audio/Sfx.js`, music in `src/audio/Music.js`) and starts after the first click/tap/key.
 The background music is a relaxed generated groove mixed under the effects (it dips briefly under hits and announcer calls);
 to use a recorded track instead, add `"music": "your-track.mp3"` to `public/sounds/sounds.json`.

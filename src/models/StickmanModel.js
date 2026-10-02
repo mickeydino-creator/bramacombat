@@ -63,6 +63,7 @@ const boneKey = (name) => {
 };
 
 const _q2 = new THREE.Quaternion();
+const _q3 = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _e = new THREE.Euler();
@@ -281,21 +282,32 @@ export class StickmanModel {
     if (this.flashTimer > 0 && (this.flashTimer -= dt) <= 0) this.material.emissive.copy(this.baseEmissive);
   }
 
-  applyPose(p) {
-    const acc = {}; // bone name -> accumulated character-space rotation
-    const accOf = (bone) => {
-      for (let b = bone.parent; b; b = b.parent) {
+  /** Nearest posed ancestor of each bone (fixed for a rig, so looked up once instead of every frame). */
+  posedParent(name) {
+    this.parentKey ||= {};
+    if (!(name in this.parentKey)) {
+      let found = null;
+      const idx = ORDER.indexOf(name);
+      for (let b = this.bones[name].parent; b && !found; b = b.parent) {
         const k = boneKey(b.name);
-        if (acc[k] && this.bones[k] === b) return acc[k];
+        if (this.bones[k] === b && ORDER.indexOf(k) > -1 && ORDER.indexOf(k) < idx) found = k;
       }
-      return IDENTITY;
-    };
+      this.parentKey[name] = found;
+    }
+    return this.parentKey[name];
+  }
+
+  applyPose(p) {
+    // bone name -> accumulated character-space rotation (reused every frame: no allocations)
+    const acc = (this.acc ||= {});
+    const D = _q3;
     for (const name of ORDER) {
       const bone = this.bones[name];
       if (!bone) continue;
       const rest = this.rest[name];
-      const parentAcc = accOf(bone);
-      const D = new THREE.Quaternion();
+      const pk = this.posedParent(name);
+      const parentAcc = pk ? acc[pk] : IDENTITY;
+      D.identity();
       if (EULER_BONES[name]) {
         const e = p[EULER_BONES[name]];
         D.setFromEuler(_e.set(e.x, e.y, e.z));
@@ -306,7 +318,7 @@ export class StickmanModel {
         _v.applyQuaternion(_q2.copy(parentAcc).invert()); // into the parent's rest-relative frame
         D.setFromUnitVectors(rest.dir, _v);
       }
-      acc[name] = parentAcc.clone().multiply(D);
+      (acc[name] ||= new THREE.Quaternion()).copy(parentAcc).multiply(D);
       // local = parentRestWorld^-1 * D * parentRestWorld * restLocal
       bone.quaternion.copy(rest.parentWorldInv).multiply(D).multiply(rest.parentWorld).multiply(rest.local);
     }

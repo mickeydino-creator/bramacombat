@@ -71,6 +71,35 @@ export class Effects {
     this.sprite('sparks', { color: PALETTE.blue, width: 6 }, { x, y, z: 0.5, size: 0.75, life: 0.18, grow: 0.6, rot: Math.random() * Math.PI, order: 21 });
   }
 
+  /**
+   * Draw every effect texture ahead of time and upload it to the GPU, a few per idle slice, so the
+   * first hit / special / guard break of a session doesn't stutter while canvases are drawn.
+   * The argument lists must match the calls above exactly (they are the texture cache keys).
+   */
+  prewarm(renderer) {
+    const hex = (c) => `#${new THREE.Color(c).getHexString()}`;
+    const jobs = [
+      () => doodleFrames('burst', { fill: hex(0xffd93b), word: '', size: 256, frames: 3, width: 7 }), // normal hit
+      () => doodleFrames('sparks', { size: 256, frames: 2, color: PALETTE.blue, width: 6 }), // block
+      () => doodleFrames('rays', { size: 256, frames: 2, color: PALETTE.ink, width: 6 }), // special activation
+      () => doodleFrames('ring', { size: 256, frames: 2, color: '#e0a800', width: 7 }),
+      () => doodleFrames('speedlines', { size: 256, frames: 2, color: PALETTE.ink, width: 6 }),
+      () => doodleFrames('burst', { fill: hex(0xff7a45), word: 'KA-POW!', size: 256, frames: 3, width: 7 }), // special hit
+      () => doodleFrames('ring', { size: 256, frames: 2, color: PALETTE.ink, width: 6 }),
+      () => doodleFrames('zigzag', { color: PALETTE.ink, size: 128, frames: 2, width: 6 }),
+      () => doodleFrames('burst', { fill: hex(0xff6b6b), word: 'CRACK!', size: 256, frames: 3, width: 7 }), // guard break
+      ...WORDS.map((w) => () => doodleFrames('burst', { fill: hex(0xffd93b), word: w, size: 256, frames: 3, width: 7 })), // K.O. hit
+    ];
+    // idle time when there is some, but at the latest every 250ms (busy phones may never be idle)
+    const idle = window.requestIdleCallback ? (fn) => requestIdleCallback(fn, { timeout: 250 }) : (fn) => setTimeout(() => fn({ timeRemaining: () => 0 }), 30);
+    const run = (deadline) => {
+      do { for (const t of jobs.shift()()) renderer.initTexture?.(t); } // at least one per slice
+      while (jobs.length && deadline.timeRemaining() > 4);
+      if (jobs.length) idle(run);
+    };
+    idle(run);
+  }
+
   update(dt) {
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
