@@ -16,7 +16,7 @@
  * YOUR OWN SOUND FILES: list them in public/sounds/sounds.json, e.g. { "ko": "ko.mp3", "victory": "win.ogg" }
  * (files in public/sounds/). A listed sound replaces the synthesized one with the same name.
  * Names: punch kick strong hit heavyHit block guardBreak damage jump land ko crowd bell announce victory
- * defeat airhorn boom scratch finishHim fight ui, and "music" (a looped background track). Only use files you have the rights to.
+ * defeat airhorn boom scratch finishHim fight pageFlip ui, and "music" (a looped background track). Only use files you have the rights to.
  */
 import { Music } from './Music.js';
 
@@ -468,6 +468,16 @@ export class Sfx {
       if (this.hasSample('fight') && performance.now() - asked < 1500) play();
       else { this.announce(); this.say('Fight!'); } // no file: synthesized stinger + voice
     });
+  }
+  /**
+   * Page turn / paper rustle (round transitions, podium): a soft airy swish that sweeps upward
+   * plus a few tiny crinkles. Quiet and filtered, so it never competes with the announcer.
+   */
+  pageFlip() {
+    if (!this.gate('pageFlip')) return;
+    this.noise({ time: 0.34, volume: 0.2, freq: 700, endFreq: 3800, type: 'bandpass', q: 0.9, attack: 0.05 });
+    this.noise({ time: 0.3, volume: 0.09, freq: 5200, endFreq: 2600, type: 'highpass', q: 0.5, attack: 0.08, delay: 0.1 });
+    for (let i = 0; i < 5; i++) this.noise({ time: 0.025, volume: 0.1, freq: 3200 + Math.random() * 2500, type: 'bandpass', q: 2, delay: 0.12 + Math.random() * 0.28 });
   }
   /** "FIGHT!" stinger. */
   announce() {

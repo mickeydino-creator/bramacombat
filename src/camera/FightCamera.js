@@ -13,6 +13,9 @@ export class FightCamera {
     this.camera.position.set(0, 2.6, 9);
   }
 
+  /** Podium framing: { pos: Vector3, look: Vector3 } (null = normal fight camera). The camera glides there smoothly. */
+  setPodium(cfg) { this.podium = cfg; }
+
   /** Short punch-in zoom (special activation / impact), decays by itself. */
   kick(amount = 0.8) { this.kickAmount = Math.max(this.kickAmount || 0, amount); }
 
@@ -22,6 +25,13 @@ export class FightCamera {
   }
 
   update(a, b, dt, snap = false) {
+    if (this.podium) { // glide to the podium shot (slower than the fight camera, so it feels like a camera move)
+      const t = snap ? 1 : 1 - Math.exp(-dt * 3.2);
+      this.camera.position.lerp(this.podium.pos, t);
+      this.target.lerp(this.podium.look, t);
+      this.camera.lookAt(this.target);
+      return;
+    }
     const midX = (a.x + b.x) / 2;
     const midY = Math.max(a.y, b.y) * 0.4;
     const dist = Math.abs(a.x - b.x);

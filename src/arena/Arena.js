@@ -28,6 +28,11 @@ export function createArena(scene) {
   s.left = -12; s.right = 12; s.top = 10; s.bottom = -6; s.near = 1; s.far = 40;
   scene.add(sun);
 
+  // Everything that belongs to the fighting stage (platform, posts, backdrop buildings, front line) lives in one
+  // group so the end-of-match transition can fold it away into the page.
+  const stage = new THREE.Group();
+  scene.add(stage);
+
   const paperMat = (kind, repeat) => new THREE.MeshLambertMaterial({ map: canvasTexture(surfaceCanvas(kind), repeat) });
 
   // Floor: ruled notebook paper
@@ -45,13 +50,13 @@ export function createArena(scene) {
   ), { jitter: 0.02 });
   platform.position.y = -0.15;
   platform.receiveShadow = true;
-  scene.add(platform);
+  stage.add(platform);
 
   // Red pen "front line" across the floor
   const lineMat = new THREE.MeshBasicMaterial({ color: PALETTE.red });
   const line = new THREE.Mesh(new THREE.BoxGeometry(ARENA_HALF_WIDTH * 2 + 1.5, 0.02, 0.05), lineMat);
   line.position.set(0, 0.01, 1.2);
-  scene.add(line);
+  stage.add(line);
 
   const boil = new Boil([], 4); // gentle line boil
 
@@ -62,10 +67,10 @@ export function createArena(scene) {
       const p = inkEdges(new THREE.Mesh(new THREE.BoxGeometry(0.5, 4, 0.5), postMat));
       p.position.set(side * (ARENA_HALF_WIDTH + 0.9), 2, z);
       p.castShadow = p.receiveShadow = true;
-      scene.add(p);
+      stage.add(p);
       const star = boil.add(doodleSprite('star', { color: PALETTE.ink, fill: PALETTE.yellow }, 0.8));
       star.position.set(side * (ARENA_HALF_WIDTH + 0.9), 4.5, z);
-      scene.add(star);
+      stage.add(star);
     }
   }
 
@@ -76,7 +81,7 @@ export function createArena(scene) {
     const b = inkEdges(new THREE.Mesh(new THREE.BoxGeometry(2.4, h, 1.5), bldgMat), { jitter: 0.03 });
     b.position.set(i * 3.4, h / 2 - 0.3, -12 - Math.abs(i) * 0.3);
     // no receiveShadow: at this sun angle no shadow can reach the backdrop, so skip the shadow lookups
-    scene.add(b);
+    stage.add(b);
   }
 
   // Sky doodles (sun, clouds, birds, scribbles) and floor doodles (arrows, X marks, stars)
@@ -98,10 +103,10 @@ export function createArena(scene) {
     const d = boil.add(doodlePlane(kind, { color, width: 6, opacity: 0.6 }, scale));
     d.rotation.set(-Math.PI / 2, 0, rot);
     d.position.set(x, 0.012, z);
-    scene.add(d);
+    stage.add(d);
   }
 
   addDeskProps(scene, boil); // stationery lying around the edges and background
 
-  return { sun, update: (dt) => boil.update(dt) };
+  return { sun, stage, boil, update: (dt) => boil.update(dt) };
 }

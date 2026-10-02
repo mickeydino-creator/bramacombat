@@ -353,7 +353,7 @@ export class Fighter {
     root.position.set(this.x, this.y, 0);
     // Models face +Z by default. Turn them sideways toward the opponent,
     // slightly angled to the camera so they read better.
-    const target = this.facing * (Math.PI / 2 - 0.35);
+    const target = this.yawOverride ?? this.facing * (Math.PI / 2 - 0.35); // yawOverride: podium pose
     root.rotation.y += (target - root.rotation.y) * Math.min(1, dt * 20);
     this.model.update(this, dt);
   }

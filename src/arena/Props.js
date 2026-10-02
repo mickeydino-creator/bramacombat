@@ -300,6 +300,15 @@ const FLOOR_DOODLES = [
   ['arrow', -3.4, 4.5, 1.2, PALETTE.blue, 0.1],
 ];
 
+/** Build a merged group from [builder, x, z, rotationY, scale, args] entries (used for the podium decor too). */
+export function buildProps(entries, startSeed = 7) {
+  const b = new Builder();
+  seed = startSeed;
+  for (const [fn, x, z, ry = 0, sc = 1, args = []] of entries) fn(b, place(x, GROUND, z, ry, sc), ...args);
+  return b.build();
+}
+export const PROP_BUILDERS = { pencil, marker, eraser, paperBall, paperClip, crayon, scrap, stickyNote, sharpener, shavings };
+
 /** Add the desk props and floor doodles to the scene; doodles join the `boil` so they wobble like the rest. */
 export function addDeskProps(scene, boil) {
   const b = new Builder();

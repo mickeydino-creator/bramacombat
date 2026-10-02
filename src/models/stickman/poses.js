@@ -146,6 +146,13 @@ const POSES = {
       head: e(-0.2, 0, 0), bounce: b * 0.12,
     };
   },
+  // Runner-up on the podium: standing, shoulders slumped, head down, arms hanging.
+  defeat: (f) => ({
+    ...NEUTRAL_POSE,
+    lArm: [0.15, -1, 0.1], lFore: [0.1, -1, 0.1], rArm: [-0.15, -1, 0.1], rFore: [-0.1, -1, 0.1],
+    lThigh: [0.1, -1, 0], rThigh: [-0.1, -1, 0], lShin: [0.05, -1, 0], rShin: [-0.05, -1, 0],
+    spine: e(0.28, 0, Math.sin(f.time * 1.5) * 0.02), head: e(0.45, 0, 0), bounce: Math.sin(f.time * 1.5) * 0.006,
+  }),
   // Defeat: knocked flat on the back, limbs sprawled.
   ko: () => ({
     ...NEUTRAL_POSE, fall: -Math.PI / 2, lift: 0.12,

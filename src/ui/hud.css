@@ -277,3 +277,35 @@ body.touch .help { display: none; }
   .mode-title { font-size: 22px; }
   .mode-desc { font-size: 14px; }
 }
+
+/* ---------------- Best of 3: round pips, page wipe, podium end screen ---------------- */
+.pips { display: inline-flex; gap: 5px; margin: 0 0 0 10px; vertical-align: middle; transform: rotate(2deg); }
+.p2 .pips { margin: 0 10px 0 0; flex-direction: row-reverse; }
+.pips i { width: 13px; height: 13px; border: 2.5px solid var(--ink); border-radius: 50%; background: rgba(255, 255, 255, 0.55); transition: background 0.2s, transform 0.2s; }
+.pips i.on { background: var(--yellow); transform: scale(1.18); box-shadow: 1px 1px 0 rgba(37, 37, 46, 0.35); }
+.p2 .name { display: inline-flex; align-items: center; flex-direction: row-reverse; }
+.hud .bars { transition: opacity 0.4s; }
+.hud.dim .bars, .hud.dim .pause-btn { opacity: 0; }
+
+.page-wipe { position: fixed; inset: 0; z-index: 30; pointer-events: none; display: none; background: var(--notebook);
+  box-shadow: -14px 0 30px rgba(0, 0, 0, 0.28); }
+.page-wipe.go { display: block; animation: page-wipe 1.1s cubic-bezier(.5, 0, .5, 1) forwards; }
+@keyframes page-wipe {
+  0% { transform: translateX(104%) skewX(-5deg); }
+  42% { transform: translateX(0) skewX(0); }
+  58% { transform: translateX(0) skewX(0); }
+  100% { transform: translateX(-104%) skewX(5deg); }
+}
+
+.overlay.podium { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 3vh) 0 calc(env(safe-area-inset-bottom) + 4vh); }
+.overlay.podium .banner { display: flex; flex-direction: column; align-items: center; }
+.overlay.podium .brand { color: var(--ink); text-shadow: 2px 2px 0 var(--yellow); margin-bottom: 8px; }
+.overlay.podium .winner { font-size: 56px; padding: 14px 40px 12px 62px; margin-bottom: 0; }
+.banner { display: flex; flex-direction: column; align-items: center; }
+@media (max-height: 500px) {
+  .overlay.podium .winner { font-size: 34px; padding: 8px 24px 6px 46px; }
+  .overlay.podium .brand { font-size: 15px; margin-bottom: 4px; }
+  .pips i { width: 10px; height: 10px; border-width: 2px; }
+}
+@media (max-height: 500px) { .overlay.podium .brand { display: none; } }

@@ -22,4 +22,11 @@ export const BLOCK_HIT_STAMINA_COST = 1.5; // per point of (unblocked) damage of
 export const GUARD_RECOVER_STAMINA = 25; // after a guard break, blocking is disabled until stamina >= this
 
 export const INTRO_FRAMES = 100; // "ROUND 1 / FIGHT!" duration
-export const KO_FRAMES = 110; // delay between K.O. and the winner screen
+export const KO_FRAMES = 110; // delay between K.O. and the round result
+
+// ---- Best of 3 ----
+export const ROUNDS_TO_WIN = 2; // first fighter to win this many rounds wins the match (so at most 3 rounds)
+export const ROUND_RESULT_FRAMES = 60; // round result ("YOU WIN!") stays this long before the page wipe starts
+export const WIPE_COVER_FRAMES = 33; // frames from the start of the page wipe until the next round is set up behind it
+export const PODIUM_DELAY_FRAMES = 30; // after the final K.O. result, before the arena starts to rearrange
+export const PODIUM_FRAMES = 96; // arena -> podium transition (1.6 s)

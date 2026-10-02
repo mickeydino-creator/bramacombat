@@ -40,6 +40,15 @@ stickmen, "boiling" doodles, comic POW! hits and notebook-page menus. Special: g
 block: hand-drawn shield (`src/fx/BlockShield.js`) with small sparks on each blocked hit. Effects: `src/fx/Effects.js`. Drawing helpers: `src/style/sketch.js`; arena: `src/arena/Arena.js`;
 UI: `src/ui/hud.css`. Study-desk props (pencils, markers, erasers, paper balls, clips, ruler, shavings, scraps...) lie around the edges and background: `src/arena/Props.js` (edit `LAYOUT` to add or move things; all baked into 2 draw calls). Fonts: Permanent Marker and Patrick Hand (SIL OFL, bundled via @fontsource).
 
+## Match format
+
+Best of 3: the first fighter to win 2 rounds wins the match (`ROUNDS_TO_WIN` in `src/config/constants.js`), so a match has 2 or 3 rounds.
+The small circles next to YOU / AI show round wins. After each round the result ("YOU WIN!" / "AI WINS!") shows briefly, then a notebook
+page sweeps across and the next round starts behind it (no podium between rounds). A drawn round (both fighters knocked out together)
+awards no point and is replayed. When a fighter reaches 2 wins, the arena folds down into the page, a victory podium rises
+(`src/arena/PodiumScene.js`: 1st place in the center and higher, the winner on top; the loser on 2nd), the camera glides over, and the end
+screen (RESTART / MAIN MENU) appears over the podium. Match flow lives in `src/core/Game.js` (`endRound`, `stepRoundEnd`, `stepPodium`).
+
 ## Project layout
 
 - `src/config/characters.js` - **character configuration**: stats, moves, specials, appearance (see Characters below)

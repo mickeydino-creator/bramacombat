@@ -17,16 +17,17 @@ export class HUD {
     el.className = showOpponentMeters ? 'hud' : 'hud hide-opponent';
     el.innerHTML = `
       <div class="bars">
-        <div class="bar-wrap p1"><div class="name"></div><div class="row hp"><span class="ico">&#9829;</span><div class="bar"><div class="lag"></div><div class="fill"></div></div></div><div class="row st"><span class="ico">&#9889;&#xFE0E;</span><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div></div><div class="row sp"><span class="ico">&#9733;</span><div class="meter special"><div class="meter-fill"></div></div></div></div>
-        <div class="bar-wrap p2"><div class="name"></div><div class="row hp"><span class="ico">&#9829;</span><div class="bar"><div class="lag"></div><div class="fill"></div></div></div><div class="row st"><span class="ico">&#9889;&#xFE0E;</span><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div></div><div class="row sp"><span class="ico">&#9733;</span><div class="meter special"><div class="meter-fill"></div></div></div></div>
+        <div class="bar-wrap p1"><div class="name"><span class="nm"></span><span class="pips"><i></i><i></i></span></div><div class="row hp"><span class="ico">&#9829;</span><div class="bar"><div class="lag"></div><div class="fill"></div></div></div><div class="row st"><span class="ico">&#9889;&#xFE0E;</span><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div></div><div class="row sp"><span class="ico">&#9733;</span><div class="meter special"><div class="meter-fill"></div></div></div></div>
+        <div class="bar-wrap p2"><div class="name"><span class="nm"></span><span class="pips"><i></i><i></i></span></div><div class="row hp"><span class="ico">&#9829;</span><div class="bar"><div class="lag"></div><div class="fill"></div></div></div><div class="row st"><span class="ico">&#9889;&#xFE0E;</span><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div></div><div class="row sp"><span class="ico">&#9733;</span><div class="meter special"><div class="meter-fill"></div></div></div></div>
       </div>
       <div class="message"></div>
       <button type="button" class="pause-btn" aria-label="Pause">II</button>
-      <div class="overlay"><div class="brand">DOODLE BRAWL</div><div class="winner"></div><div class="overlay-buttons"><button type="button" data-act="restart" class="primary">RESTART</button><button type="button" data-act="menu">MAIN MENU</button></div></div>`;
+      <div class="overlay"><div class="banner"><div class="brand">DOODLE BRAWL</div><div class="winner"></div></div><div class="overlay-buttons"><button type="button" data-act="restart" class="primary">RESTART</button><button type="button" data-act="menu">MAIN MENU</button></div></div>`;
     document.body.appendChild(el);
     this.el = el;
     this.bars = ['.p1', '.p2'].map((s) => ({
-      name: el.querySelector(`${s} .name`),
+      name: el.querySelector(`${s} .nm`),
+      pips: [...el.querySelectorAll(`${s} .pips i`)],
       fill: el.querySelector(`${s} .fill`),
       lag: el.querySelector(`${s} .lag`),
       meter: el.querySelector(`${s} .meter.stamina`),
@@ -108,6 +109,21 @@ export class HUD {
   /** Hidden while a menu covers the game. */
   setVisible(v) { this.el.classList.toggle('hidden', !v); }
 
-  showWinner(text) { this.winner.textContent = text; this.overlay.classList.add('show'); }
-  hideWinner() { this.overlay.classList.remove('show'); }
+  /** Round wins as pips next to the names (best of 3: first to ROUNDS_TO_WIN). */
+  setWins(i, wins) { this.bars[i].pips.forEach((p, k) => p.classList.toggle('on', k < wins)); }
+
+  /** Fade the bars out/in (e.g. while the arena turns into the podium). */
+  setBarsVisible(v) { this.el.classList.toggle('dim', !v); }
+
+  /** Round-transition page wipe: a notebook page sweeps across the screen; the next round is set up while it covers the view. */
+  pageWipe() {
+    if (!this.wipeEl) { this.wipeEl = document.createElement('div'); this.wipeEl.className = 'page-wipe'; document.body.appendChild(this.wipeEl); }
+    const el = this.wipeEl;
+    el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+    clearTimeout(this.wipeTimer); this.wipeTimer = setTimeout(() => el.classList.remove('go'), 1200);
+  }
+
+  /** podium = true: end screen over the victory podium (no dark curtain, banner on top, buttons at the bottom). */
+  showWinner(text, podium = false) { this.winner.textContent = text; this.overlay.classList.toggle('podium', podium); this.overlay.classList.add('show'); }
+  hideWinner() { this.overlay.classList.remove('show', 'podium'); }
 }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   STEP, ARENA_HALF_WIDTH, PUSH_WIDTH, PUSH_HEIGHT, INTRO_FRAMES, KO_FRAMES,
+  ROUNDS_TO_WIN, ROUND_RESULT_FRAMES, WIPE_COVER_FRAMES, PODIUM_DELAY_FRAMES, PODIUM_FRAMES,
 } from '../config/constants.js';
 import { CHARACTERS } from '../config/characters.js';
 import { Fighter } from '../fighter/Fighter.js';
@@ -11,6 +12,7 @@ import { CombinedController } from '../input/CombinedController.js';
 import { TouchController, isTouchDevice } from '../input/TouchController.js';
 import { AIController } from '../ai/AIController.js';
 import { createArena } from '../arena/Arena.js';
+import { PodiumScene, PODIUM } from '../arena/PodiumScene.js';
 import { FightCamera } from '../camera/FightCamera.js';
 import { Effects } from '../fx/Effects.js';
 import { Sfx } from '../audio/Sfx.js';
@@ -49,6 +51,7 @@ export class Game {
 
     this.scene = new THREE.Scene();
     this.arena = createArena(this.scene);
+    this.podiumScene = new PodiumScene(this.scene, this.arena);
     this.settings = new Settings();
     this.cam = new FightCamera(window.innerWidth / window.innerHeight);
     this.effects = new Effects(this.scene);
@@ -109,6 +112,7 @@ export class Game {
     this.mainMenu();
     // Compile every shader now and pre-draw the effect textures in idle time (no first-hit stutter).
     this.renderer.compile(this.scene, this.cam.camera);
+    this.podiumScene.prime(this.renderer, this.cam.camera); // podium shaders/textures too: no hitch at the first transition
     this.effects.prewarm(this.renderer);
   }
 
@@ -148,6 +152,7 @@ export class Game {
 
   /** Show the main menu with the fighters idling in the background. */
   mainMenu() {
+    this.newMatch();
     this.restart();
     this.phase = 'menu';
     this.hud.setVisible(false);
@@ -157,9 +162,10 @@ export class Game {
     this.sfx.setMusicMode('menu');
   }
 
-  /** START / RESTART: a fresh round. */
+  /** START / RESTART: a fresh match (best of 3), starting with round 1. */
   startFight() {
-    if (this.phase === 'menu' || this.phase === 'paused') this.hud.pageTurn();
+    if (['menu', 'paused', 'over', 'podium', 'roundend'].includes(this.phase)) this.hud.pageTurn();
+    this.newMatch();
     this.menu.close();
     this.controllers[0].getInput(this.p1, this.p2); // drop presses made while in menus
     this.hud.setVisible(true);
@@ -168,6 +174,17 @@ export class Game {
     this.restart();
     this.sfx.bell();
     this.sfx.say('Round one');
+  }
+
+  /** Best of 3: the first fighter to win ROUNDS_TO_WIN rounds wins the match. */
+  newMatch() {
+    this.match = { wins: [0, 0], round: 1 };
+    this.fighters.forEach((_, i) => this.hud.setWins(i, 0));
+  }
+
+  roundLabel() {
+    const { wins, round } = this.match;
+    return wins[0] === ROUNDS_TO_WIN - 1 && wins[1] === ROUNDS_TO_WIN - 1 ? 'FINAL ROUND' : `ROUND ${round}`;
   }
 
   pause() {
@@ -185,7 +202,12 @@ export class Game {
     this.touch?.setVisible(true);
   }
 
+  /** Set up the current round: fighters back in place, arena back to normal (also undoes the podium). */
   restart() {
+    this.podiumScene.reset();
+    this.cam.setPodium(null);
+    this.hud.setBarsVisible(true);
+    for (const f of this.fighters) f.yawOverride = null;
     this.p1.reset(-2.5, 1);
     this.p2.reset(2.5, -1);
     this.playerIndicator?.snap();
@@ -197,7 +219,7 @@ export class Game {
     this.finishHimDone = false;
     this.clearMessageAt = 0;
     this.hud.hideWinner();
-    this.hud.showMessage('ROUND 1');
+    this.hud.showMessage(this.roundLabel());
     this.fighters.forEach((f, i) => this.hud.setHealth(i, f.health, f.maxHealth));
     this.cam.update(this.p1, this.p2, STEP, true);
   }
@@ -225,6 +247,7 @@ export class Game {
   step() {
     if (this.phase === 'menu' || this.phase === 'paused') return; // game frozen behind the menu
     this.phaseFrame++;
+    if (this.phase === 'podium' || this.phase === 'over') { this.stepPodium(); return; }
 
     if (this.phase === 'intro') {
       if (this.phaseFrame === Math.floor(INTRO_FRAMES * 0.55)) { this.hud.showMessage('FIGHT!'); this.sfx.fight(); } // once per round
@@ -240,8 +263,6 @@ export class Game {
     const fighting = this.phase === 'fight';
     // Player input is always polled so presses don't pile up between rounds.
     const raw1 = this.controllers[0].getInput(this.p1, this.p2);
-    if (raw1.restart && this.phase === 'over') { this.startFight(); return; }
-    if (raw1.back && this.phase === 'over') { this.mainMenu(); return; }
     if (raw1.pause && this.phase !== 'over') { this.pause(); return; }
     const in1 = fighting ? raw1 : NEUTRAL;
     const in2 = fighting ? this.controllers[1].getInput(this.p2, this.p1) : NEUTRAL;
@@ -258,15 +279,94 @@ export class Game {
 
     if (this.phase === 'ko') {
       if (this.phaseFrame === 40 && this.winner) this.winner.setVictory();
-      if (this.phaseFrame >= KO_FRAMES) {
-        this.phase = 'over';
-        this.hud.showMessage('');
-        this.hud.showWinner(this.winner === this.p1 ? 'YOU WIN' : this.winner ? 'AI WINS' : 'DRAW');
-        this.touch?.setVisible(false); // the darkened end screen has its own buttons
-        if (this.winner === this.p1) { this.sfx.victory(); this.sfx.say('You win!'); }
-        else { this.sfx.defeat(); if (!this.sfx.hasSample('defeat')) this.sfx.say(this.winner ? 'You lose' : 'Draw'); }
-      }
+      if (this.phaseFrame >= KO_FRAMES) this.endRound();
+    } else if (this.phase === 'roundend') {
+      this.stepRoundEnd();
     }
+  }
+
+  /** The round is over (after the K.O. animation): count the win, then next round or podium. */
+  endRound() {
+    const w = this.winner ? this.fighters.indexOf(this.winner) : -1;
+    if (w >= 0) {
+      this.match.wins[w]++;
+      this.hud.setWins(w, this.match.wins[w]);
+    }
+    this.phaseFrame = 0;
+    if (w >= 0 && this.match.wins[w] >= ROUNDS_TO_WIN) { // match decided: arena -> podium
+      this.phase = 'podium';
+      this.podiumStarted = false;
+      this.hud.showMessage('');
+      this.touch?.setVisible(false);
+      return;
+    }
+    if (w >= 0) this.match.round++; // (a drawn round is replayed with the same number)
+    this.phase = 'roundend';
+    this.hud.showMessage(w < 0 ? 'DRAW' : w === 0 ? 'YOU WIN!' : 'AI WINS!');
+  }
+
+  /** Between rounds: show the result for a moment, then a notebook page sweeps across and the next round starts behind it. */
+  stepRoundEnd() {
+    const f = this.phaseFrame;
+    if (f === ROUND_RESULT_FRAMES) { this.hud.pageWipe(); this.sfx.pageFlip(); }
+    if (f === ROUND_RESULT_FRAMES + WIPE_COVER_FRAMES) {
+      this.controllers[0].getInput(this.p1, this.p2); // drop presses made during the transition
+      this.restart();
+      this.sfx.bell();
+      this.sfx.say(this.roundLabel() === 'FINAL ROUND' ? 'Final round' : `Round ${['one', 'two', 'three'][this.match.round - 1] ?? this.match.round}`);
+    }
+  }
+
+  /**
+   * Match over. 'podium' = the arena rearranges into the victory podium (PODIUM_FRAMES), 'over' = podium shown with the
+   * end-screen buttons. Fighters are moved by hand here (no physics): the winner hops to 1st place, the loser stands up and
+   * hops to 2nd.
+   */
+  stepPodium() {
+    const raw1 = this.controllers[0].getInput(this.p1, this.p2);
+    if (this.phase === 'over') {
+      if (raw1.restart) this.startFight();
+      else if (raw1.back) this.mainMenu();
+      return;
+    }
+    const f = this.phaseFrame;
+    if (f === PODIUM_DELAY_FRAMES && !this.podiumStarted) this.beginPodium();
+    if (!this.podiumStarted) return;
+    const t = Math.min(1, (f - PODIUM_DELAY_FRAMES) / PODIUM_FRAMES);
+    this.podiumScene.setProgress(t);
+    const k = t * t * (3 - 2 * t);
+    for (const p of this.podiumMoves) {
+      const { fighter } = p;
+      fighter.x = p.fromX + (p.toX - p.fromX) * k;
+      fighter.y = p.fromY + (p.toY - p.fromY) * k + Math.sin(Math.PI * k) * p.hop;
+      fighter.vy = t < 0.5 ? 1 : -1;
+      if (t >= 0.92) fighter.state = p.final;
+    }
+    if (t >= 1) this.finishMatch();
+  }
+
+  beginPodium() {
+    this.podiumStarted = true;
+    const win = this.winner, lose = this.fighters.find((x) => x !== win);
+    const spot = (fighter, slot, yaw, final, hop) => ({ fighter, fromX: fighter.x, fromY: fighter.y, toX: slot.x, toY: slot.top, final, hop, yaw });
+    this.podiumMoves = [spot(win, PODIUM.first, 0.22, 'victory', 1.5), spot(lose, PODIUM.second, -0.22, 'defeat', 0.9)];
+    for (const p of this.podiumMoves) {
+      p.fighter.yawOverride = p.yaw; // turn toward the camera
+      p.fighter.attack = null;
+      p.fighter.vx = 0;
+      p.fighter.state = 'air'; // jump / fall pose while hopping onto the podium
+    }
+    this.cam.setPodium(PODIUM.camera);
+    this.hud.setBarsVisible(false);
+    this.sfx.pageFlip();
+  }
+
+  finishMatch() {
+    this.phase = 'over';
+    this.phaseFrame = 0;
+    this.hud.showWinner(this.winner === this.p1 ? 'YOU WIN' : 'AI WINS', true);
+    if (this.winner === this.p1) { this.sfx.victory(); this.sfx.say('You win!'); }
+    else { this.sfx.defeat(); if (!this.sfx.hasSample('defeat')) this.sfx.say('You lose'); }
   }
 
   /** Special activation feedback - identical for YOU and AI (both fighters go through here). */
@@ -325,6 +425,7 @@ export class Game {
   }
 
   render(dt) {
+    if (this.phase === 'podium' || this.phase === 'over') for (const f of this.fighters) f.time += dt; // podium poses keep animating
     for (const f of this.fighters) f.syncModel(dt);
     this.cam.update(this.p1, this.p2, dt);
     this.effects.update(dt);
