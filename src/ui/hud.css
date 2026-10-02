@@ -152,9 +152,6 @@ canvas { display: block; }
 .menu-screen[data-screen=settings] { width: min(540px, 92vw); }
 .menu-screen.active { display: flex; animation: page-in 0.32s ease-out; }
 @keyframes page-in { from { opacity: 0; transform: perspective(1200px) rotateY(-14deg) translateX(-20px) rotate(-0.8deg); } to { opacity: 1; transform: rotate(-0.8deg); } }
-.app-icon { display: block; align-self: center; width: clamp(64px, 15vmin, 112px); aspect-ratio: 1; margin: -4px 0 6px; transform: rotate(-3deg);
-  filter: drop-shadow(2px 4px 0 rgba(0, 0, 0, 0.2)); }
-.app-icon img { display: block; width: 100%; height: 100%; }
 .logo { margin: 0 0 14px; text-align: center; font: clamp(44px, 9vmin, 86px)/0.95 var(--marker); color: var(--ink);
   text-shadow: 3px 3px 0 var(--yellow); transform: rotate(-3deg); }
 .logo span { display: block; color: var(--red); font-size: 0.6em; letter-spacing: 0.25em; text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.12); margin-top: 4px; }
@@ -241,7 +238,6 @@ body.touch .help { display: none; }
   .menu-screen { gap: 6px; padding: 14px 20px 14px 66px; }
   .menu-screen button { padding: 5px 12px; font-size: 20px; }
   .logo { margin-bottom: 4px; font-size: 40px; }
-  .app-icon { width: 44px; margin: -6px 0 2px; }
   .pause-btn { width: 40px; height: 40px; top: calc(env(safe-area-inset-top) + 50px); }
 }
 

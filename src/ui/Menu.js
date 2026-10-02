@@ -73,7 +73,6 @@ export class Menu {
     el.className = 'menu-root';
     el.innerHTML = `
       <div class="menu-screen" data-screen="main">
-        <picture class="app-icon"><source srcset="/logo-dark-512.png" media="(prefers-color-scheme: dark)"><img src="/logo-light-512.png" alt="Doodle Brawl" width="512" height="512" draggable="false"></picture>
         <h1 class="logo">DOODLE<span>BRAWL</span></h1>
         <button data-go="modes" class="primary">PLAY</button>
         <button data-go="howto">HOW TO PLAY</button>
