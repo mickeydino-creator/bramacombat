@@ -43,6 +43,28 @@ const HOW_TO_PLAY = `
     <p><b>Strong attack = special</b> - A slow, hard-hitting blow. Usable only when the gold <b>SPECIAL</b> meter is full; using it empties the meter and it refills in ${SPECIAL_METER.rechargeSeconds} seconds. The AI follows the same rules.</p>
   </div>`;
 
+/*
+ * GAME MODES (PLAY screen). To add a mode later: set `available: true` and give it an `act`
+ * that Menu.act() handles (and a callback from Game). Locked modes are shown but can't be entered.
+ */
+export const GAME_MODES = [
+  { id: 'ai', title: 'VS AI', desc: 'Fight the computer', available: true, act: 'start' },
+  { id: 'multiplayer', title: 'MULTIPLAYER', desc: 'Coming later', available: false },
+  { id: 'friends', title: 'VS FRIENDS', desc: 'Coming later', available: false },
+];
+
+// Hand-drawn padlock (ink outline, uneven strokes)
+const LOCK_ICON = `<svg class="lock" viewBox="0 0 32 36" aria-hidden="true">
+  <path d="M9.5 15.5 C9 9.5 10.5 4.2 16.2 4 C21.8 3.9 23.2 9 22.6 15.4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+  <path d="M5.2 15.8 C12 14.6 20 14.9 27 15.4 C27.6 21 27.4 27 26.8 32.2 C19.5 33 12.6 32.8 5.6 32.3 C4.9 26.6 4.8 21 5.2 15.8 Z" fill="#ffd93b" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M16 21.5 L16 26.5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+</svg>`;
+
+const modeButton = (m) => m.available
+  ? `<button class="mode" data-act="${m.act}" data-mode="${m.id}"><span class="mode-title">${m.title}</span><span class="mode-desc">${m.desc}</span></button>`
+  : `<button class="mode locked" data-locked="${m.id}" aria-disabled="true"><span class="mode-title">${m.title}</span>`
+    + `<span class="mode-desc">${LOCK_ICON}${m.desc}</span></button>`;
+
 export class Menu {
   constructor({ settings, sfx, gamepad, onStart, onResume, onRestart, onMainMenu }) {
     Object.assign(this, { settings, sfx, gamepad, onStart, onResume, onRestart, onMainMenu });
@@ -52,9 +74,15 @@ export class Menu {
     el.innerHTML = `
       <div class="menu-screen" data-screen="main">
         <h1 class="logo">BRAMA<span>COMBAT</span></h1>
-        <button data-act="start" class="primary">START</button>
+        <button data-go="modes" class="primary">PLAY</button>
         <button data-go="howto">HOW TO PLAY</button>
         <button data-go="settings">SETTINGS</button>
+      </div>
+      <div class="menu-screen" data-screen="modes">
+        <h2>GAME MODE</h2>
+        ${GAME_MODES.map(modeButton).join('\n        ')}
+        <p class="mode-note" aria-live="polite"></p>
+        <button data-act="back" class="back">BACK</button>
       </div>
       <div class="menu-screen" data-screen="pause">
         <h2>PAUSED</h2>
@@ -87,7 +115,8 @@ export class Menu {
       const b = e.target.closest('button');
       if (!b) return;
       this.sfx.ui();
-      if (b.dataset.go) this.show(b.dataset.go);
+      if (b.dataset.locked) this.locked(b);
+      else if (b.dataset.go) this.show(b.dataset.go);
       else if (b.dataset.quality) this.settings.set('quality', b.dataset.quality);
       else this.act(b.dataset.act);
     });
@@ -114,9 +143,20 @@ export class Menu {
     else if (a === 'voice') this.settings.set('voice', !this.settings.get('voice'));
   }
 
+  /** A locked mode was picked: shake it and say it's coming later; nothing else happens. */
+  locked(b) {
+    const m = GAME_MODES.find((x) => x.id === b.dataset.locked);
+    b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope');
+    const note = this.el.querySelector('.mode-note');
+    note.textContent = `${m.title} is locked - coming in a later update!`;
+    clearTimeout(this.noteTimer);
+    this.noteTimer = setTimeout(() => { note.textContent = ''; }, 2200);
+  }
+
   /** Open a screen on top of the current one (BACK returns). `reset` starts a new stack. */
   show(name, reset = false) {
     if (reset) this.stack = [];
+    const note = this.el.querySelector('.mode-note'); if (note) note.textContent = '';
     this.stack.push(name);
     this.render();
   }

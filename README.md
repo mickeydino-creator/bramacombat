@@ -13,7 +13,8 @@ Open the URL Vite prints (http://localhost:5173). `npm run build` creates a stat
 
 ## Controls
 
-The game opens on a main menu (START / HOW TO PLAY / SETTINGS). Menus work with mouse/touch, keyboard
+The game opens on a main menu (PLAY / HOW TO PLAY / SETTINGS). PLAY opens the game-mode screen: **VS AI** (playable),
+**MULTIPLAYER** and **VS FRIENDS** (locked, coming later). Modes are listed in `GAME_MODES` in `src/ui/Menu.js`. Menus work with mouse/touch, keyboard
 (arrows + Enter, Esc = back) and gamepad (D-pad/stick + A, B = back). In the fight the player is **YOU**, the opponent **AI**.
 
 - Keyboard: A / D move, W jump, J punch, K kick, L strong attack (= the special), hold Shift block, Esc pause, R restart, H hitboxes (debug).
@@ -24,6 +25,8 @@ The game opens on a main menu (START / HOW TO PLAY / SETTINGS). Menus work with 
 
 Settings (saved in the browser): master / SFX / music volume, fullscreen, graphics quality (low/medium/high).
 Audio is synthesized with WebAudio (`src/audio/Sfx.js`, music in `src/audio/Music.js`) and starts after the first click/tap/key.
+The background music is a relaxed generated groove mixed under the effects (it dips briefly under hits and announcer calls);
+to use a recorded track instead, add `"music": "your-track.mp3"` to `public/sounds/sounds.json`.
 To use your own sound files, list them in `public/sounds/sounds.json` (see `public/sounds/README.md`).
 Recorded clips included: FIGHT! (round start, once per round), KNOCKOUT, FINISH HIM, sad trombone (defeat).
 

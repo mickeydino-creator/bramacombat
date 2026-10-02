@@ -262,7 +262,7 @@ export class Game {
       this.cam.kick(0.7);
     } else {
       this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, 0xffd93b, !defender.alive);
-      this.sfx.hit(strength);
+      this.sfx.hit(strength, move.anim);
     }
     if (defender === this.p1) this.sfx.damage();
     this.cam.shake(move.shake || 0.05 * strength);

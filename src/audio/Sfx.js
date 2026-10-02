@@ -1,9 +1,10 @@
 /*
- * Game audio: all sounds are synthesized with WebAudio (no files to load, nothing that can 404).
+ * Game audio: sounds are synthesized with WebAudio; recorded files from public/sounds/ replace them.
  *
- * Routing:  each sound -> sfxBus ─┐
- *           music      -> musicBus ┴-> master -> compressor -> speakers   (+ analyser, for tests)
- * Volumes come from Settings (master / sfx / music).
+ * Routing:  each sound -> sfxBus ──────────────┐
+ *           music      -> musicBus -> musicDuck ┴-> master -> compressor -> speakers   (+ analyser, for tests)
+ * Volumes come from Settings (master / sfx / music). The music dips briefly under hits and calls
+ * (musicDuck) so the action always cuts through.
  *
  * Browsers start audio "suspended" until a user gesture. unlock() is attached to every kind of
  * gesture (click, touchend, pointerup, keydown...) and keeps retrying until the context is running.
@@ -15,18 +16,27 @@
  * YOUR OWN SOUND FILES: list them in public/sounds/sounds.json, e.g. { "ko": "ko.mp3", "victory": "win.ogg" }
  * (files in public/sounds/). A listed sound replaces the synthesized one with the same name.
  * Names: punch kick strong hit heavyHit block guardBreak damage jump land ko crowd bell announce victory
- * defeat airhorn boom scratch finishHim ui. Only use files you have the rights to.
+ * defeat airhorn boom scratch finishHim fight ui, and "music" (a looped background track). Only use files you have the rights to.
  */
 import { Music } from './Music.js';
 
 const vary = (amount = 0.08) => 1 + (Math.random() * 2 - 1) * amount;
 const DEDUPE_SECONDS = 0.04;
-// Normal-hit variations (Hz): low thump start, body filter, faint slap
+const MUSIC_LEVEL = 0.42; // music sits well under the effects (x Settings "music")
+// Normal-hit variations, cycled so two hits in a row never sound identical:
+// body = start pitch of the saturated thud (Hz), smack = lowpass start of the impact noise (Hz)
 const HIT_VARIANTS = [
-  { thump: 140, body: 900, snap: 1100 },
-  { thump: 125, body: 780, snap: 950 },
-  { thump: 155, body: 1000, snap: 1250 },
+  { body: 185, smack: 2600 },
+  { body: 165, smack: 2200 },
+  { body: 205, smack: 2900 },
+  { body: 175, smack: 2400 },
 ];
+// Soft saturation: gives the low thud mid harmonics so it is felt on phone/laptop speakers too.
+const DRIVE_CURVE = (() => {
+  const c = new Float32Array(512);
+  for (let i = 0; i < 512; i++) { const x = i / 256 - 1; c[i] = Math.tanh(x * 2.6) / Math.tanh(2.6); }
+  return c;
+})();
 const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click', 'keydown'];
 
 export class Sfx {
@@ -94,7 +104,8 @@ export class Sfx {
     const fb = ctx.createGain(); fb.gain.value = 0.38;
     const tone = ctx.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 2400;
     this.echoIn.connect(delay); delay.connect(tone); tone.connect(fb); fb.connect(delay); tone.connect(this.sfxBus);
-    this.musicBus.connect(this.master);
+    this.musicDuck = ctx.createGain();
+    this.musicBus.connect(this.musicDuck).connect(this.master);
     this.master.connect(this.comp);
     this.comp.connect(ctx.destination);
     this.comp.connect(this.analyser);
@@ -118,7 +129,16 @@ export class Sfx {
     const t = this.ctx.currentTime;
     this.master.gain.setTargetAtTime(this.volumes.master, t, 0.02);
     this.sfxBus.gain.setTargetAtTime(this.volumes.sfx, t, 0.02);
-    this.musicBus.gain.setTargetAtTime(this.volumes.music * 0.6, t, 0.02);
+    this.musicBus.gain.setTargetAtTime(this.volumes.music * MUSIC_LEVEL, t, 0.02);
+  }
+
+  /** Briefly lower the music (amount 0..1) so an impact or announcer call stands out. */
+  duck(amount = 0.35, hold = 0.12) {
+    if (!this.musicDuck) return;
+    const g = this.musicDuck.gain, t = this.ctx.currentTime;
+    g.cancelScheduledValues(t);
+    g.setTargetAtTime(1 - amount, t, 0.015);
+    g.setTargetAtTime(1, t + hold, 0.25);
   }
 
   /** Music mood: 'menu' (soft, filtered) or 'fight'. */
@@ -167,6 +187,7 @@ export class Sfx {
         p?.catch?.(fail);
       } catch (e) { fail(e); }
     })));
+    if (this.samples.music) this.music.useTrack(this.samples.music); // recorded music replaces the generated loop
     this.samplesReady = true;
     this.samplesReadyResolve?.();
   }
@@ -287,25 +308,47 @@ export class Sfx {
   }
 
   // ---------- impacts ----------
-  /**
-   * Normal hit: a short, soft, low "thud" - a body punch, nothing bright or clicky, so it doesn't
-   * get tiring when repeated. Three slightly different variations are picked at random.
-   */
-  hit(strength = 1) {
-    if (!this.gate('hit')) return;
-    const v = HIT_VARIANTS[Math.floor(Math.random() * HIT_VARIANTS.length)];
-    const s = Math.min(1.3, Math.max(0.7, strength));
-    this.tone({ freq: v.thump * vary(0.05), endFreq: 48, time: 0.09, type: 'sine', volume: 0.55 * s, attack: 0.002 }); // thump
-    this.noise({ time: 0.06, volume: 0.32 * s, freq: v.body * vary(0.06), endFreq: 220, type: 'lowpass', q: 0.6 }); // body
-    this.noise({ time: 0.025, volume: 0.07, freq: v.snap, type: 'bandpass', q: 1.2 }); // a hint of slap, kept soft
+  /** Saturated pitch-dropping sine: the "body" of an impact. */
+  thud({ freq, endFreq, time, volume, delay = 0 }) {
+    const c = this.ctx, t = c.currentTime + delay;
+    const o = c.createOscillator(), sh = c.createWaveShaper(), g = c.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    o.frequency.exponentialRampToValueAtTime(endFreq, t + time * 0.8);
+    sh.curve = DRIVE_CURVE;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(volume, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(volume * 0.3, t + time * 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + time);
+    o.connect(sh).connect(g).connect(this.sfxBus);
+    o.start(t); o.stop(t + time + 0.02);
   }
-  /** Heavy hit (strong attack): deeper and fuller version of the same thud, slightly longer. */
+
+  /**
+   * Normal hit (punch / kick): a short, punchy "thwack" - a saturated low thud plus a quick
+   * lowpass-swept smack of noise. No high tones or resonant ringing, so it stays pleasant when
+   * repeated. Variations are cycled; kicks are a bit lower and fuller than punches.
+   */
+  hit(strength = 1, kind = 'punch') {
+    if (!this.gate('hit')) return;
+    const v = HIT_VARIANTS[(this.hitIndex = ((this.hitIndex ?? -1) + 1) % HIT_VARIANTS.length)];
+    const s = Math.min(1.15, Math.max(0.8, strength * 1.4));
+    const kick = kind === 'kick';
+    const p = (kick ? 0.84 : 1) * vary(0.03);
+    this.thud({ freq: v.body * p, endFreq: 62 * p, time: kick ? 0.13 : 0.1, volume: 0.42 * s });
+    this.noise({ time: kick ? 0.05 : 0.035, volume: 0.3 * s, freq: v.smack * p, endFreq: 450, type: 'lowpass', q: 0.5, attack: 0.001 });
+    this.tone({ freq: 80 * p, endFreq: 44, time: 0.1, type: 'sine', volume: 0.22 * s, attack: 0.003 }); // sub weight
+    this.duck(0.3, 0.08);
+  }
+  /** Heavy hit (strong attack): the same family, deeper and longer, with a little crunch. */
   heavyHit() {
     if (!this.gate('heavyHit')) return;
-    this.tone({ freq: 105 * vary(0.05), endFreq: 38, time: 0.2, type: 'sine', volume: 0.75, attack: 0.002 });
-    this.tone({ freq: 62, endFreq: 34, time: 0.26, type: 'sine', volume: 0.35, attack: 0.005 }); // sub
-    this.noise({ time: 0.12, volume: 0.42, freq: 650 * vary(0.06), endFreq: 160, type: 'lowpass', q: 0.6 });
-    this.noise({ time: 0.04, volume: 0.08, freq: 900, type: 'bandpass', q: 1 });
+    const p = vary(0.03);
+    this.thud({ freq: 150 * p, endFreq: 46, time: 0.2, volume: 0.55 });
+    this.tone({ freq: 62, endFreq: 34, time: 0.28, type: 'sine', volume: 0.35, attack: 0.004 }); // sub
+    this.noise({ time: 0.08, volume: 0.38, freq: 2200 * p, endFreq: 260, type: 'lowpass', q: 0.5, attack: 0.001 });
+    this.noise({ time: 0.06, volume: 0.08, freq: 1200, type: 'bandpass', q: 0.6, delay: 0.005 }); // crunch
+    this.duck(0.5, 0.25);
   }
   /** Blocked hit: short, clean "thunk-tink" - a dull knock with a soft metallic ring, nothing shrill. */
   block() {
@@ -320,11 +363,10 @@ export class Sfx {
     this.noise({ time: 0.3, volume: 0.6, freq: 3000, endFreq: 300, type: 'bandpass', q: 1.5 });
     this.tone({ freq: 520, endFreq: 110, time: 0.35, type: 'square', volume: 0.18 });
   }
-  /** Player took damage: short "grunt". */
+  /** Player took damage: a quiet, muffled "oof" under the hit (no buzzy tones). */
   damage() {
     if (!this.gate('damage')) return;
-    this.tone({ freq: 170 * vary(), endFreq: 95, time: 0.18, type: 'sawtooth', volume: 0.16, delay: 0.03, attack: 0.01 });
-    this.tone({ freq: 340 * vary(), endFreq: 190, time: 0.14, type: 'triangle', volume: 0.08, delay: 0.03, attack: 0.01 });
+    this.tone({ freq: 150 * vary(0.05), endFreq: 95, time: 0.12, type: 'triangle', volume: 0.09, delay: 0.03, attack: 0.01, lowpass: 600 });
   }
 
   // ---------- movement ----------
@@ -342,6 +384,7 @@ export class Sfx {
   // ---------- round ----------
   /** K.O.: huge impact + boom with echo, then the crowd goes wild. */
   ko() {
+    this.duck(0.7, 2.5);
     this.boom();
     this.crowd(1.1); // the crowd goes wild after the call
     if (!this.gate('ko')) return; // recorded "KNOCKOUT" plays here when available
@@ -352,6 +395,7 @@ export class Sfx {
   }
   /** "FINISH HIM!" when a fighter is almost out of health (recorded file, or announcer voice fallback). */
   finishHim() {
+    this.duck(0.55, 1.4);
     if (!this.gate('finishHim')) return;
     this.tone({ freq: 70, endFreq: 50, time: 1.2, type: 'sawtooth', volume: 0.15, lowpass: 400, echo: 0.3 });
     this.say('Finish him!');
@@ -417,10 +461,11 @@ export class Sfx {
    */
   fight() {
     if (!this.running) return;
-    if (this.hasSample('fight')) { this.gate('fight'); return; }
+    const play = () => { if (this.gate('fight')) return; this.duck(0.55, 1.2); };
+    if (this.hasSample('fight')) { play(); return; }
     const asked = performance.now();
     this.whenSamplesReady().then(() => {
-      if (this.hasSample('fight') && performance.now() - asked < 900) this.gate('fight');
+      if (this.hasSample('fight') && performance.now() - asked < 1500) play();
       else { this.announce(); this.say('Fight!'); } // no file: synthesized stinger + voice
     });
   }
