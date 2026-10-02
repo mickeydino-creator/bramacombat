@@ -43,15 +43,15 @@ const easeOutBack = (t) => { const c = 1.9; const x = t - 1; return 1 + (c + 1) 
 function numeralFrames(char, color) {
   return [0, 1].map(() => {
     const c = document.createElement('canvas');
-    c.width = c.height = 256;
+    c.width = c.height = 512;
     const g = c.getContext('2d');
-    g.font = '215px "Permanent Marker", "Comic Sans MS", cursive';
+    g.font = '430px "Permanent Marker", "Comic Sans MS", cursive';
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineJoin = 'round';
-    const j = () => (Math.random() - 0.5) * 6;
-    g.strokeStyle = PALETTE.ink; g.lineWidth = 11; g.strokeText(char, 128 + j(), 138 + j());
-    g.fillStyle = color; g.fillText(char, 128 + j() * 0.4, 138 + j() * 0.4);
-    g.strokeStyle = PALETTE.ink; g.lineWidth = 3.5; g.strokeText(char, 128 + j(), 138 + j());
+    const j = () => (Math.random() - 0.5) * 12;
+    g.strokeStyle = PALETTE.ink; g.lineWidth = 22; g.strokeText(char, 256 + j(), 276 + j());
+    g.fillStyle = color; g.fillText(char, 256 + j() * 0.4, 276 + j() * 0.4);
+    g.strokeStyle = PALETTE.ink; g.lineWidth = 7; g.strokeText(char, 256 + j(), 276 + j());
     return canvasTexture(c);
   });
 }
@@ -65,7 +65,7 @@ export class PodiumScene {
     this.root = new THREE.Group();
     scene.add(this.root);
 
-    const tex = (kind, repeat) => { const t = canvasTexture(surfaceCanvas(kind), repeat); this.textures.push(t); return t; };
+    const tex = (kind, repeat) => { const t = canvasTexture(surfaceCanvas(kind, 1024), repeat); this.textures.push(t); return t; };
     const mat = (kind, repeat) => new THREE.MeshLambertMaterial({ map: tex(kind, repeat) });
     this.blocks = {};
     const crowd = PODIUM_LAYOUTS.crowd.slots;
@@ -95,11 +95,11 @@ export class PodiumScene {
 
     // decor: doodles, stars, a few paper balls and pencils around the podium
     this.decor = new THREE.Group();
-    const rays = this.boil.add(doodleSprite('rays', { color: '#e0a800', width: 6, opacity: 0.32 }, 8.5));
+    const rays = this.boil.add(doodleSprite('rays', { color: '#e0a800', width: 6, opacity: 0.32, size: 1024 }, 8.5));
     rays.position.set(1.0, 2.6, -2.4);
     this.decor.add(rays);
     for (const [x, y, z, s] of [[-1.9, 3.9, -1.2, 0.85], [3.9, 4.1, -1.2, 0.95], [1.0, 5.0, -1.8, 0.65], [-3.3, 2.6, -1, 0.55], [5.2, 2.9, -1, 0.5]]) {
-      const star = this.boil.add(doodleSprite('star', { color: PALETTE.ink, fill: PALETTE.yellow, opacity: 0.9 }, s));
+      const star = this.boil.add(doodleSprite('star', { color: PALETTE.ink, fill: PALETTE.yellow, opacity: 0.9, size: 512 }, s));
       star.position.set(x, y, z);
       this.decor.add(star);
     }
@@ -118,17 +118,17 @@ export class PodiumScene {
 
     // The hole that opens under the 4th-place fighter (hand-drawn dark ellipse on the page)
     const hc = document.createElement('canvas');
-    hc.width = 256; hc.height = 180;
+    hc.width = 512; hc.height = 360;
     const hg = hc.getContext('2d');
     hg.lineCap = 'round';
-    hg.fillStyle = '#17171f'; hg.beginPath(); hg.ellipse(128, 90, 112, 72, 0, 0, Math.PI * 2); hg.fill();
-    hg.strokeStyle = 'rgba(255,255,255,0.12)'; hg.lineWidth = 3;
-    for (let i = 0; i < 9; i++) { hg.beginPath(); hg.moveTo(40 + i * 22, 40); hg.lineTo(26 + i * 22, 140); hg.stroke(); } // pencil hatching inside
-    hg.strokeStyle = PALETTE.ink; hg.lineWidth = 7;
+    hg.fillStyle = '#17171f'; hg.beginPath(); hg.ellipse(256, 180, 224, 144, 0, 0, Math.PI * 2); hg.fill();
+    hg.strokeStyle = 'rgba(255,255,255,0.12)'; hg.lineWidth = 6;
+    for (let i = 0; i < 9; i++) { hg.beginPath(); hg.moveTo(80 + i * 44, 80); hg.lineTo(52 + i * 44, 280); hg.stroke(); } // pencil hatching inside
+    hg.strokeStyle = PALETTE.ink; hg.lineWidth = 13;
     for (let pass = 0; pass < 2; pass++) { // wobbly double pen outline
       hg.beginPath();
       for (let a = 0; a <= Math.PI * 2 + 0.2; a += 0.2) {
-        const x = 128 + Math.cos(a) * (112 + Math.random() * 5), y = 90 + Math.sin(a) * (72 + Math.random() * 4);
+        const x = 256 + Math.cos(a) * (224 + Math.random() * 10), y = 180 + Math.sin(a) * (144 + Math.random() * 8);
         if (a === 0) hg.moveTo(x, y); else hg.lineTo(x, y);
       }
       hg.stroke();

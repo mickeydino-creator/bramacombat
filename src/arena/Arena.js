@@ -153,6 +153,12 @@ export function createArena(scene) {
     sun, stage, boil,
     /** Resize the playing area (platform, posts, shadows). Rebuilds only when the width changes. */
     setHalfWidth(hw) { if (hw !== halfWidth) build(hw); },
+    /** Podium: shrink the shadow map to the podium area (sharper shadows); false = cover the whole platform again. */
+    focusShadows(on) {
+      const sc = sun.shadow.camera;
+      if (on) { sc.left = -8; sc.right = 8; sc.top = 8; sc.bottom = -4; } else { sc.left = -(halfWidth + 4.5); sc.right = halfWidth + 4.5; sc.top = 10; sc.bottom = -6; }
+      sc.updateProjectionMatrix();
+    },
     update: (dt) => boil.update(dt),
   };
 }

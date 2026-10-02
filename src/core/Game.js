@@ -23,6 +23,7 @@ import { BlockShield } from '../fx/BlockShield.js';
 import { Settings } from './Settings.js';
 import { Menu } from '../ui/Menu.js';
 import { PlayerIndicator } from '../fx/PlayerIndicator.js';
+import { PALETTE } from '../style/sketch.js';
 
 const NEUTRAL = { move: 0, jump: false, actions: [] };
 
@@ -34,6 +35,7 @@ const NEUTRAL = { move: 0, jump: false, actions: [] };
  * quality setting changes.
  */
 const SLOW_MS = 22;
+const FAST_MS = 11; // below this on the end screen, the resolution goes back up (1.25x steps keep clear of SLOW_MS: no flip-flopping)
 const SAMPLE_FRAMES = 30;
 const MIN_PIXEL_RATIO = { low: 0.75, medium: 1, high: 1 };
 
@@ -155,6 +157,10 @@ export class Game {
     if (median > SLOW_MS && pr > this.minPixelRatio + 0.01) {
       this.renderer.setPixelRatio(Math.max(this.minPixelRatio, pr * 0.8));
       this.renderer.setSize(window.innerWidth, window.innerHeight);
+    } else if (this.phase === 'over' && median < FAST_MS && pr < this.maxPixelRatio - 0.01) {
+      // The podium is a calm, static scene: win back sharpness that was given up during the fight (never above the quality setting).
+      this.renderer.setPixelRatio(Math.min(this.maxPixelRatio, pr * 1.25));
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
     }
   }
 
@@ -269,6 +275,7 @@ export class Game {
     for (const f of this.fighters) f.facing = Math.sign(this.nearestEnemy(f).x - f.x) || 1; // everybody starts facing the nearest opponent
     this.downOrder = []; // knocked-out fighters in order (decides the podium places)
     this.fallAnim = null;
+    this.arena.focusShadows(false);
     for (const f of this.fighters) { this.setClip(f, null); f.model.root.visible = true; } // (the 4th place may have fallen through the page)
     this.playerIndicator?.snap();
     this.controllers.forEach((c) => c.reset?.());
@@ -436,14 +443,17 @@ export class Game {
     const f = fall.fighter, n = ++fall.frame;
     const HOLE_AT = 45, OPEN = 18, DROP_AT = HOLE_AT + OPEN + 12;
     this.podiumScene.setHole(Math.min(1, Math.max(0, (n - HOLE_AT) / OPEN)));
+    if (n === HOLE_AT) { f.state = 'startled'; f.attack = null; f.vy = 0; } // freezes and stares at the hole
     if (n === DROP_AT) {
       this.setClip(f, this.floorClip); // only what is above the page stays visible: the body disappears into the hole
-      f.state = 'air'; f.vy = -1.5; f.attack = null;
+      f.state = 'plunge'; f.vy = -1.5; fall.yaw = f.yawOverride ?? 0;
+      this.effects.sprite('speedlines', { color: PALETTE.ink, width: 6 }, { x: f.x, y: f.y + 1.6, size: 1.5, life: 0.4, grow: 0.1, follow: f, oy: 1.7, rot: Math.PI / 2 });
       this.sfx.fall();
     }
     if (n > DROP_AT && f.model.root.visible) {
       f.vy -= 16 * STEP;
       f.y += f.vy * STEP;
+      f.yawOverride = fall.yaw + (n - DROP_AT) * 0.13; // tumbling as they go down
       if (f.y < -3.6) f.model.root.visible = false;
     }
   }
@@ -493,6 +503,7 @@ export class Game {
       p.fighter.state = 'air'; // jump / fall pose while hopping onto the podium
     }
     this.cam.setPodium(layout.camera);
+    this.arena.focusShadows(true); // tight shadow map around the podium: crisp shadows on the blocks
     this.hud.setBarsVisible(false);
     this.sfx.pageFlip();
   }

@@ -146,6 +146,26 @@ const POSES = {
       head: e(-0.2, 0, 0), bounce: b * 0.12,
     };
   },
+  // 4th place when the hole opens under them: frozen stiff, staring down, hands up, trembling.
+  startled: (f) => {
+    const sh = Math.sin(f.time * 38);
+    return {
+      ...NEUTRAL_POSE,
+      lArm: [0.55, 0.5, 0.25], lFore: [0.25, 0.95, 0.2], rArm: [-0.55, 0.5, 0.25], rFore: [-0.25, 0.95, 0.2],
+      lThigh: [0.15, -1, 0.1], rThigh: [-0.15, -1, 0.1], lShin: [0.05, -1, 0],
+      head: e(0.6, 0, 0), spine: e(-0.12, 0, sh * 0.05), bounce: sh * 0.012,
+    };
+  },
+  // Falling through the hole: arms windmilling, legs pedalling, head thrown back.
+  plunge: (f) => {
+    const s = Math.sin(f.time * 17), c = Math.cos(f.time * 17);
+    return {
+      ...NEUTRAL_POSE,
+      lArm: [0.5 + s * 0.35, 1, 0.3 + c * 0.2], lFore: [0.25, 1, c * 0.6], rArm: [-0.5 - s * 0.35, 1, 0.3 - c * 0.2], rFore: [-0.25, 1, -c * 0.6],
+      lThigh: [0.25, -0.75, 0.55 + s * 0.45], lShin: [0.1, -0.95, -0.45 + c * 0.2], rThigh: [-0.25, -0.75, -0.55 - s * 0.45], rShin: [-0.1, -0.95, 0.45 - c * 0.2],
+      head: e(-0.4, 0, 0), spine: e(-0.18, 0, s * 0.14),
+    };
+  },
   // Runner-up on the podium: standing, shoulders slumped, head down, arms hanging.
   defeat: (f) => ({
     ...NEUTRAL_POSE,
