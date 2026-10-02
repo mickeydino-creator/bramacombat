@@ -7,10 +7,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>Doodle Brawl</title>
     <meta name="apple-mobile-web-app-title" content="Doodle Brawl" />
-    <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Doodle Brawl app icon: light version by default, dark version when the system/browser is in dark mode -->
+    <link rel="icon" href="/logo-light.ico" sizes="any" media="(prefers-color-scheme: light)" />
+    <link rel="icon" href="/logo-dark.ico" sizes="any" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/logo-light-32.png" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/logo-light-64.png" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/logo-dark-32.png" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/logo-dark-64.png" media="(prefers-color-scheme: dark)" />
+    <link rel="apple-touch-icon" href="/logo-light-180.png" />
     <link rel="stylesheet" href="/src/ui/hud.css" />
   </head>
   <body>
