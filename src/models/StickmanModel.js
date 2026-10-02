@@ -258,9 +258,10 @@ export class StickmanModel {
     if (this.material) this.material.emissive.copy(this.baseEmissive);
   }
 
-  flash() {
-    this.flashTimer = 0.12;
-    if (this.material) this.material.emissive.setHex(0xff2222);
+  /** Brief glow: red when hit (default), other colors for e.g. special activation. */
+  flash(color = 0xff2222, time = 0.12) {
+    this.flashTimer = time;
+    if (this.material) this.material.emissive.setHex(color);
   }
 
   update(f, dt) {

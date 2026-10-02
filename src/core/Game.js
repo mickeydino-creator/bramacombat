@@ -61,7 +61,10 @@ export class Game {
     this.hud.setNames('YOU', 'AI');
 
     for (const f of this.fighters) {
-      f.on('attackStart', (a) => this.sfx.attack(a.name));
+      f.on('attackStart', (a) => {
+        this.sfx.attack(a.name);
+        if (a.name === 'strong') this.onSpecialActivate(f); // strong attack = the special
+      });
       f.on('jump', () => this.sfx.jump());
       f.on('land', () => this.sfx.land());
       f.on('guardBreak', () => {
@@ -190,7 +193,7 @@ export class Game {
     this.phaseFrame++;
 
     if (this.phase === 'intro') {
-      if (this.phaseFrame === Math.floor(INTRO_FRAMES * 0.55)) { this.hud.showMessage('FIGHT!'); this.sfx.announce(); this.sfx.say('Fight!'); }
+      if (this.phaseFrame === Math.floor(INTRO_FRAMES * 0.55)) { this.hud.showMessage('FIGHT!'); this.sfx.fight(); } // once per round
       if (this.phaseFrame >= INTRO_FRAMES) { this.phase = 'fight'; this.hud.showMessage(''); }
     }
 
@@ -232,11 +235,19 @@ export class Game {
     }
   }
 
+  /** Special activation feedback - identical for YOU and AI (both fighters go through here). */
+  onSpecialActivate(f) {
+    this.effects.specialActivate(f);
+    f.model.flash?.(0xffc21a, 0.25); // golden glow
+    this.cam.kick(0.9);
+    this.cam.shake(0.08, 0.15);
+  }
+
   onHit({ attacker, defender, move, point }) {
     if (defender.lastHitBlocked && defender.alive) {
       // Blocked: short freeze, blue spark, shield flash, no screen shake.
       this.hitstop = Math.max(this.hitstop, Math.ceil((move.hitstop || 0) / 2));
-      this.effects.hitSpark(point.x, point.y, 0.5, 0x9cc2ff, 'BLOCK');
+      this.effects.blockSparks(point.x, point.y);
       this.shields[this.fighters.indexOf(defender)].flash();
       this.sfx.block();
       this.hud.setHealth(this.fighters.indexOf(defender), defender.health, defender.maxHealth);
@@ -244,9 +255,15 @@ export class Game {
     }
     const strength = move.damage / 10;
     this.hitstop = Math.max(this.hitstop, move.hitstop || 0);
-    this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, move.anim === 'strong' ? 0xff7a45 : 0xffd93b, move.anim === 'strong' || !defender.alive);
-    if (move.anim === 'strong') this.sfx.heavyHit();
-    else this.sfx.hit(strength);
+    if (move.anim === 'strong') { // special landing: distinct impact
+      this.effects.specialImpact(point.x, point.y);
+      this.sfx.heavyHit();
+      this.sfx.specialHit();
+      this.cam.kick(0.7);
+    } else {
+      this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, 0xffd93b, !defender.alive);
+      this.sfx.hit(strength);
+    }
     if (defender === this.p1) this.sfx.damage();
     this.cam.shake(move.shake || 0.05 * strength);
     this.hud.setHealth(this.fighters.indexOf(defender), defender.health, defender.maxHealth);

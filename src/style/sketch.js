@@ -130,6 +130,52 @@ export function inkEdges(mesh, { color = PALETTE.ink, threshold = 30, jitter = 0
 // ---------------- doodles ----------------
 
 const DOODLES = {
+  /** radiating pen rays (special aura) */
+  rays(g, s) {
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + rand(-0.08, 0.08), r0 = s * rand(0.2, 0.26), r1 = s * rand(0.4, 0.48);
+      penLine(g, s / 2 + Math.cos(a) * r0, s / 2 + Math.sin(a) * r0, s / 2 + Math.cos(a) * r1, s / 2 + Math.sin(a) * r1, 2, 1);
+    }
+  },
+  /** rough hand-drawn circle (shockwave) */
+  ring(g, s) {
+    for (let p = 0; p < 2; p++) {
+      g.beginPath();
+      for (let a = 0; a <= Math.PI * 2.05; a += 0.15) {
+        const r = s * (0.42 + rand(-0.012, 0.012)), x = s / 2 + Math.cos(a) * r, y = s / 2 + Math.sin(a) * r;
+        a ? g.lineTo(x, y) : g.moveTo(x, y);
+      }
+      g.stroke();
+    }
+  },
+  /** horizontal motion lines */
+  speedlines(g, s) {
+    for (const [y, l] of [[0.3, 0.7], [0.45, 0.85], [0.6, 0.6], [0.72, 0.75]]) penLine(g, s * (0.92 - l), s * y, s * 0.92, s * y + rand(-2, 2), 2, 1);
+  },
+  /** short spark dashes around a point */
+  sparks(g, s) {
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + rand(-0.2, 0.2), r0 = s * 0.16, r1 = s * rand(0.3, 0.42);
+      penLine(g, s / 2 + Math.cos(a) * r0, s / 2 + Math.sin(a) * r0, s / 2 + Math.cos(a) * r1, s / 2 + Math.sin(a) * r1, 1.5, 1);
+    }
+  },
+  /** hand-drawn shield: rounded heater shape with light hatching and a center line */
+  shield(g, s) {
+    const path = () => {
+      g.beginPath();
+      g.moveTo(s * 0.5 + rand(-2, 2), s * 0.1);
+      g.quadraticCurveTo(s * 0.82, s * 0.16 + rand(-2, 2), s * 0.84, s * 0.2);
+      g.quadraticCurveTo(s * 0.86 + rand(-2, 2), s * 0.66, s * 0.5, s * 0.92);
+      g.quadraticCurveTo(s * 0.14 + rand(-2, 2), s * 0.66, s * 0.16, s * 0.2);
+      g.quadraticCurveTo(s * 0.18, s * 0.16 + rand(-2, 2), s * 0.5, s * 0.1);
+    };
+    g.save(); path(); g.fillStyle = 'rgba(140, 180, 255, 0.28)'; g.fill(); g.clip();
+    const w = g.lineWidth; g.lineWidth = w * 0.35; g.globalAlpha = 0.45;
+    for (let i = -s; i < s * 2; i += s * 0.07) penLine(g, i, 0, i + s * 0.6, s, 1, 1);
+    g.restore();
+    path(); g.stroke(); path(); g.stroke(); // double pen outline
+    penLine(g, s * 0.5, s * 0.18, s * 0.5, s * 0.82, 2, 1);
+  },
   star(g, s) {
     const pts = [];
     for (let i = 0; i < 10; i++) {

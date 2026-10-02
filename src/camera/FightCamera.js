@@ -10,6 +10,9 @@ export class FightCamera {
     this.camera.position.set(0, 2.6, 9);
   }
 
+  /** Short punch-in zoom (special activation / impact), decays by itself. */
+  kick(amount = 0.8) { this.kickAmount = Math.max(this.kickAmount || 0, amount); }
+
   shake(amount, time = 0.25) {
     this.shakeAmount = Math.max(this.shakeAmount, amount);
     this.shakeTime = Math.max(this.shakeTime, time);
@@ -21,7 +24,9 @@ export class FightCamera {
     const dist = Math.abs(a.x - b.x);
     const zoom = THREE.MathUtils.clamp(6.5 + dist * 0.75, 7.5, 15);
 
-    const desired = new THREE.Vector3(midX, 2.3 + zoom * 0.08 + midY, zoom);
+    this.kickAmount = (this.kickAmount || 0) * Math.exp(-dt * 7);
+    const z = zoom - (this.kickAmount || 0);
+    const desired = new THREE.Vector3(midX, 2.3 + z * 0.08 + midY, z);
     const look = new THREE.Vector3(midX, 1.1 + midY, 0);
     const t = snap ? 1 : 1 - Math.exp(-dt * 5);
     this.camera.position.lerp(desired, t);

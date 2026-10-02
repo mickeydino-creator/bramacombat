@@ -5,13 +5,12 @@ export class HUD {
     el.className = showOpponentMeters ? 'hud' : 'hud hide-opponent';
     el.innerHTML = `
       <div class="bars">
-        <div class="bar-wrap p1"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div><div class="meter-label stamina-label"><span class="meter-name">STAMINA</span></div><div class="meter special"><div class="meter-fill"></div></div><div class="meter-label special-label"><span class="meter-name">SPECIAL POWER</span><span class="special-name"></span><span class="special-state"></span><span class="meter-key"></span></div></div>
-        <div class="bar-wrap p2"><div class="name"></div><div class="bar"><div class="lag"></div><div class="fill"></div></div><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div><div class="meter-label stamina-label"><span class="meter-name">STAMINA</span></div><div class="meter special"><div class="meter-fill"></div></div><div class="meter-label special-label"><span class="meter-name">SPECIAL POWER</span><span class="special-name"></span><span class="special-state"></span><span class="meter-key"></span></div></div>
+        <div class="bar-wrap p1"><div class="name"></div><div class="row hp"><span class="ico">&#9829;</span><div class="bar"><div class="lag"></div><div class="fill"></div></div></div><div class="row st"><span class="ico">&#9889;&#xFE0E;</span><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div></div><div class="row sp"><span class="ico">&#9733;</span><div class="meter special"><div class="meter-fill"></div></div></div></div>
+        <div class="bar-wrap p2"><div class="name"></div><div class="row hp"><span class="ico">&#9829;</span><div class="bar"><div class="lag"></div><div class="fill"></div></div></div><div class="row st"><span class="ico">&#9889;&#xFE0E;</span><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div></div><div class="row sp"><span class="ico">&#9733;</span><div class="meter special"><div class="meter-fill"></div></div></div></div>
       </div>
       <div class="message"></div>
       <button type="button" class="pause-btn" aria-label="Pause">II</button>
-      <div class="overlay"><div class="winner"></div><div class="overlay-buttons"><button type="button" data-act="restart" class="primary">RESTART</button><button type="button" data-act="menu">MAIN MENU</button></div></div>
-      <div class="help">ESC / START &nbsp;pause &nbsp;|&nbsp; controls: HOW TO PLAY in the menu</div>`;
+      <div class="overlay"><div class="winner"></div><div class="overlay-buttons"><button type="button" data-act="restart" class="primary">RESTART</button><button type="button" data-act="menu">MAIN MENU</button></div></div>`;
     document.body.appendChild(el);
     this.el = el;
     this.bars = ['.p1', '.p2'].map((s) => ({
@@ -23,10 +22,6 @@ export class HUD {
       meterLag: el.querySelector(`${s} .meter.stamina .meter-lag`),
       special: el.querySelector(`${s} .meter.special`),
       specialFill: el.querySelector(`${s} .meter.special .meter-fill`),
-      specialLabel: el.querySelector(`${s} .special-label`),
-      specialName: el.querySelector(`${s} .special-name`),
-      specialState: el.querySelector(`${s} .special-state`),
-      specialKey: el.querySelector(`${s} .special-label .meter-key`),
     }));
     this.message = el.querySelector('.message');
     this.overlay = el.querySelector('.overlay');
@@ -79,13 +74,10 @@ export class HUD {
       b.special.classList.remove('used'); void b.special.offsetWidth; b.special.classList.add('used'); // flash on use
     }
     b.lastSpecialPct = pct;
+    // No text labels: the meter itself shows the state (glows when usable, red outline = not enough stamina).
     const usable = status.full && hasStamina;
     b.special.classList.toggle('ready', usable);
-    b.specialLabel.classList.toggle('ready', usable);
-    b.specialLabel.classList.toggle('nostamina', status.full && !hasStamina);
-    b.specialState.textContent = usable ? 'READY!' : status.full ? 'NEED STAMINA' : `${status.secondsLeft.toFixed(1)}s`;
-    if (b.specialName.textContent !== status.label) b.specialName.textContent = status.label;
-    if (b.specialKey.textContent !== keyLabel) b.specialKey.textContent = keyLabel;
+    b.special.classList.toggle('nostamina', status.full && !hasStamina);
   }
 
   showMessage(text) {

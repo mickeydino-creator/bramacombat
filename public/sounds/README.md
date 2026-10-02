@@ -9,9 +9,9 @@ put the files here and list them in `sounds.json`, for example:
 
 A listed sound replaces the synthesized sound with the same name. Available names:
 punch, kick, strong, hit, heavyHit, block, guardBreak, damage, jump, land, ko, boom, crowd, bell,
-announce, victory, airhorn, defeat, scratch, finishHim, ui.
+announce, victory, airhorn, defeat, scratch, finishHim, fight, ui.
 
 Currently included: `knockout.mp3` (K.O.), `sad-trombone.mp3` (you lose), `finish-him.mp3`
-(when a fighter first drops to 25% health), trimmed from recordings supplied by the project owner.
+(when a fighter first drops to 25% health) and `fight.mp3` (round start), trimmed from recordings supplied by the project owner.
 
 Only add files you have the right to use (your own recordings or properly licensed sounds).

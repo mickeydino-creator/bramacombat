@@ -25,9 +25,14 @@ The game opens on a main menu (START / HOW TO PLAY / SETTINGS). Menus work with 
 Settings (saved in the browser): master / SFX / music volume, fullscreen, graphics quality (low/medium/high).
 Audio is synthesized with WebAudio (`src/audio/Sfx.js`, music in `src/audio/Music.js`) and starts after the first click/tap/key.
 To use your own sound files, list them in `public/sounds/sounds.json` (see `public/sounds/README.md`).
+Recorded clips included: FIGHT! (round start, once per round), KNOCKOUT, FINISH HIM, sad trombone (defeat).
+
+**HUD:** no text labels - icons only: ♥ health, ⚡ stamina, ★ special power (glows when ready, dashed red = not enough stamina).
+The AI shows only its health bar; its stamina and special meters still work, they are just hidden.
 
 **Look:** the whole game is a notebook come to life - paper page, blue rules, red margin, pen-outlined props and
-stickmen, "boiling" doodles, comic POW! hits and notebook-page menus. Drawing helpers: `src/style/sketch.js`; arena: `src/arena/Arena.js`;
+stickmen, "boiling" doodles, comic POW! hits and notebook-page menus. Special: golden aura + ring + speed lines and a camera punch-in on activation, KA-POW! burst on hit;
+block: hand-drawn shield (`src/fx/BlockShield.js`) with small sparks on each blocked hit. Effects: `src/fx/Effects.js`. Drawing helpers: `src/style/sketch.js`; arena: `src/arena/Arena.js`;
 UI: `src/ui/hud.css`. Fonts: Permanent Marker and Patrick Hand (SIL OFL, bundled via @fontsource).
 
 ## Project layout

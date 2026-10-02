@@ -1,35 +1,38 @@
 import * as THREE from 'three';
-import { PALETTE } from '../style/sketch.js';
+import { doodleFrames, PALETTE } from '../style/sketch.js';
 
-/** Blue-pen hexagon shield in front of a fighter while it blocks; flashes when a hit is blocked. */
+/*
+ * Hand-drawn blue-pen shield in front of a fighter, shown only while it blocks
+ * (appears/disappears instantly). A blocked hit makes it pop and flash.
+ */
 export class BlockShield {
   constructor(scene, fighter) {
     this.fighter = fighter;
     this.flashTime = 0;
-    this.group = new THREE.Group();
-    const geo = new THREE.CircleGeometry(0.75, 6);
-    this.mat = new THREE.MeshBasicMaterial({ color: 0x8fb4ff, transparent: true, opacity: 0.25, depthWrite: false, side: THREE.DoubleSide });
-    this.group.add(new THREE.Mesh(geo, this.mat));
-    // double pen outline
-    const edge = new THREE.EdgesGeometry(geo);
-    this.lineMat = new THREE.LineBasicMaterial({ color: PALETTE.blue, transparent: true });
-    for (const s of [1, 1.06]) { const l = new THREE.LineSegments(edge, this.lineMat); l.scale.setScalar(s); l.rotation.z = (s - 1) * 2; this.group.add(l); }
-    this.group.visible = false;
-    scene.add(this.group);
+    this.frames = doodleFrames('shield', { color: PALETTE.blue, size: 256, frames: 2, width: 7 });
+    this.hitFrames = doodleFrames('shield', { color: PALETTE.ink, size: 256, frames: 2, width: 9 });
+    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.frames[0], transparent: true, depthWrite: false }));
+    this.sprite.renderOrder = 6;
+    this.sprite.visible = false;
+    scene.add(this.sprite);
+    this.t = 0;
   }
 
-  flash() { this.flashTime = 0.15; }
+  flash() { this.flashTime = 0.16; }
 
   update(dt) {
     const f = this.fighter;
     const on = f.blocking || f.state === 'blockstun';
+    this.sprite.visible = on;
     if (this.flashTime > 0) this.flashTime -= dt;
-    this.group.visible = on;
     if (!on) return;
-    this.group.position.set(f.x + f.facing * 0.5, f.y + 1.15, 0);
-    this.group.rotation.y = f.facing * 0.9; // angled between the opponent and the camera
+    this.t += dt;
+    this.sprite.position.set(f.x + f.facing * 0.55, f.y + 1.2, 0.35);
     const flash = this.flashTime > 0;
-    this.mat.opacity = flash ? 0.6 : 0.22 + Math.sin(f.time * 10) * 0.04;
-    this.group.scale.setScalar(flash ? 1.15 : 1);
+    const k = flash ? 1 + (this.flashTime / 0.16) * 0.25 : 1;
+    this.sprite.scale.set(0.95 * k, 1.15 * k, 1);
+    const set = flash ? this.hitFrames : this.frames;
+    this.sprite.material.map = set[Math.floor(this.t * 5) % set.length];
+    this.sprite.material.opacity = flash ? 1 : 0.92;
   }
 }

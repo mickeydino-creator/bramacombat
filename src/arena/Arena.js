@@ -52,7 +52,7 @@ export function createArena(scene) {
   line.position.set(0, 0.01, 1.2);
   scene.add(line);
 
-  const boil = new Boil();
+  const boil = new Boil([], 4); // gentle line boil
 
   // Boundary posts: pencil-sketched columns with doodle stars on top
   const postMat = paperMat('crosshatch', [1, 4]);
@@ -80,19 +80,18 @@ export function createArena(scene) {
 
   // Sky doodles (sun, clouds, birds, scribbles) and floor doodles (arrows, X marks, stars)
   const sky = [
-    ['sun', [-8, 6.5, -10], 2.6, PALETTE.ink], ['cloud', [-1.5, 6.8, -11], 3, PALETTE.blue], ['cloud', [6.5, 6.2, -11], 2.6, PALETTE.blue],
-    ['birds', [2.5, 5.2, -10], 2, PALETTE.ink], ['spiral', [10.5, 5.5, -10], 1.4, PALETTE.pencil], ['zigzag', [-12, 4.8, -10], 2, PALETTE.red],
-    ['heart', [9.5, 2.6, -7], 0.9, PALETTE.red], ['scribble', [-10.5, 2.4, -7], 1.4, PALETTE.pencil],
+    // kept to a few quiet doodles so the fighters stay the focus
+    ['sun', [-8, 6.5, -10], 2.4, PALETTE.pencil], ['cloud', [-1.5, 6.8, -11], 2.6, PALETTE.blue], ['cloud', [6.5, 6.2, -11], 2.3, PALETTE.blue],
+    ['birds', [2.5, 5.2, -10], 1.8, PALETTE.pencil],
   ];
   for (const [kind, pos, scale, color] of sky) {
-    const d = boil.add(doodleSprite(kind, { color, width: 6 }, scale));
+    const d = boil.add(doodleSprite(kind, { color, width: 6, opacity: 0.55 }, scale));
     d.position.set(...pos);
     scene.add(d);
   }
   const floor = [
     ['arrow', [-ARENA_HALF_WIDTH + 1, 2.0], 1.4, PALETTE.blue, 0.2], ['arrow', [ARENA_HALF_WIDTH - 1, 2.0], 1.4, PALETTE.blue, Math.PI - 0.2],
-    ['x', [0, 2.1], 0.7, PALETTE.red, 0], ['star', [-4.5, -1.9], 0.8, PALETTE.ink, 0.3], ['scribble', [4.8, -1.9], 1.4, PALETTE.pencil, 0],
-    ['spiral', [ARENA_HALF_WIDTH + 2.5, 1], 1.4, PALETTE.pencil, 0], ['star', [-ARENA_HALF_WIDTH - 2.5, 0.5], 1, PALETTE.red, 0],
+    ['x', [0, 2.1], 0.6, PALETTE.red, 0],
   ];
   for (const [kind, [x, z], scale, color, rot] of floor) {
     const d = boil.add(doodlePlane(kind, { color, width: 6, opacity: 0.6 }, scale));

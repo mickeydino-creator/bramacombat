@@ -36,7 +36,20 @@ canvas { display: block; }
 .bar-wrap { flex: 1; max-width: 520px; min-width: 0; }
 .bar-wrap.p2 { text-align: right; }
 /* YOU vs AI: only YOU's health / stamina / special power are shown (the AI still has and uses all three). */
-.hud.hide-opponent .p2 .bar, .hud.hide-opponent .p2 .meter, .hud.hide-opponent .p2 .meter-label { display: none; }
+.hud.hide-opponent .p2 .row.st, .hud.hide-opponent .p2 .row.sp { display: none; } /* AI: health only */
+/* icon + meter rows (no text labels) */
+.row { display: flex; align-items: center; gap: 6px; }
+.p2 .row { flex-direction: row-reverse; }
+.row .bar, .row .meter { flex: 1; margin-top: 0; width: auto; }
+.row.st, .row.sp { margin-top: 6px; }
+.row.st { width: 64%; }
+.row.sp { width: 50%; }
+.p2 .row.st, .p2 .row.sp { margin-left: auto; }
+.ico { width: 18px; flex: none; text-align: center; font: 17px/1 var(--hand); }
+.row.hp .ico { color: var(--red); font-size: 20px; }
+.row.st .ico { color: var(--blue); }
+.row.sp .ico { color: #e0a800; font-size: 19px; }
+.meter.special.nostamina { border-color: var(--red); border-style: dashed; }
 .name { font: 30px/1 var(--marker); margin-bottom: 4px; transform: rotate(-2deg); display: inline-block; }
 .p1 .name { color: var(--blue); }
 .p2 .name { color: var(--red); transform: rotate(2deg); }
@@ -92,7 +105,6 @@ canvas { display: block; }
 .message.pop { animation: msg-pop 0.35s cubic-bezier(.2, 1.6, .5, 1); }
 @keyframes msg-pop { from { transform: rotate(-12deg) scale(0.3); opacity: 0; } to { transform: rotate(-3deg) scale(1); opacity: 1; } }
 
-.help { position: absolute; bottom: 10px; width: 100%; text-align: center; font: 15px var(--hand); color: var(--pencil); }
 
 .pause-btn { position: absolute; top: calc(env(safe-area-inset-top) + 14px); left: 50%; transform: translateX(-50%) rotate(-4deg);
   pointer-events: auto; width: 46px; height: 46px; border-radius: 50% 45% 52% 47%; border: 3px solid var(--ink);

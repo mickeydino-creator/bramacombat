@@ -168,6 +168,13 @@ export class Sfx {
       } catch (e) { fail(e); }
     })));
     this.samplesReady = true;
+    this.samplesReadyResolve?.();
+  }
+
+  /** Resolves once recorded sounds are decoded (or immediately if there are none). */
+  whenSamplesReady() {
+    if (this.samplesReady) return Promise.resolve();
+    return (this.samplesReadyPromise ||= new Promise((r) => { this.samplesReadyResolve = r; }));
   }
 
   playSample(buf, delay = 0) {
@@ -238,11 +245,11 @@ export class Sfx {
   }
 
   // ---------- attacks (on attack start) ----------
-  /** Whoosh for an attack/action name: punch | kick | strong | special. */
+  /** Whoosh for an attack/action name: punch | kick | strong (= the special) | special. */
   attack(name) {
     if (name === 'punch') this.punch();
     else if (name === 'kick') this.kick();
-    else if (name === 'strong') this.strong();
+    else if (name === 'strong') { this.strong(); this.specialCharge(); }
     else if (name === 'special') this.special();
   }
   punch() {
@@ -257,6 +264,20 @@ export class Sfx {
     if (!this.gate('strong')) return;
     this.noise({ time: 0.28, volume: 0.45, freq: 500 * vary(), endFreq: 2600, type: 'bandpass', q: 1.5, attack: 0.05 });
     this.tone({ freq: 110, endFreq: 65, time: 0.25, type: 'sawtooth', volume: 0.12, attack: 0.04 });
+  }
+  /** Special activation: a rising power-up surge under the whoosh (same for YOU and AI). */
+  specialCharge() {
+    if (!this.gate('specialCharge')) return;
+    this.tone({ freq: 160 * vary(0.04), endFreq: 640, time: 0.26, type: 'sawtooth', volume: 0.14, attack: 0.02, lowpass: 2200 });
+    this.tone({ freq: 240 * vary(0.04), endFreq: 960, time: 0.26, type: 'triangle', volume: 0.1, attack: 0.02 });
+    this.noise({ time: 0.3, volume: 0.22, freq: 400, endFreq: 3200, type: 'bandpass', q: 1.8, attack: 0.04 });
+  }
+  /** Special landing on the opponent: deep impact + short boom tail. */
+  specialHit() {
+    if (!this.gate('specialHit')) return;
+    this.tone({ freq: 95, endFreq: 32, time: 0.45, type: 'sine', volume: 0.85, attack: 0.002, echo: 0.25 });
+    this.noise({ time: 0.22, volume: 0.5, freq: 700, endFreq: 140, type: 'lowpass', q: 0.7, echo: 0.2 });
+    this.noise({ time: 0.05, volume: 0.12, freq: 1100, type: 'bandpass', q: 1 });
   }
   special() {
     if (!this.gate('special')) return;
@@ -286,11 +307,13 @@ export class Sfx {
     this.noise({ time: 0.12, volume: 0.42, freq: 650 * vary(0.06), endFreq: 160, type: 'lowpass', q: 0.6 });
     this.noise({ time: 0.04, volume: 0.08, freq: 900, type: 'bandpass', q: 1 });
   }
+  /** Blocked hit: short, clean "thunk-tink" - a dull knock with a soft metallic ring, nothing shrill. */
   block() {
     if (!this.gate('block')) return;
-    this.tone({ freq: 1250 * vary(0.03), endFreq: 1100, time: 0.12, type: 'square', volume: 0.12 });
-    this.tone({ freq: 1870 * vary(0.03), endFreq: 1700, time: 0.1, type: 'triangle', volume: 0.12 });
-    this.noise({ time: 0.07, volume: 0.35, freq: 4000, type: 'highpass' });
+    this.tone({ freq: 220 * vary(0.04), endFreq: 120, time: 0.07, type: 'sine', volume: 0.4, attack: 0.002 });
+    this.tone({ freq: 760 * vary(0.03), endFreq: 720, time: 0.16, type: 'triangle', volume: 0.08, attack: 0.002 });
+    this.tone({ freq: 1140 * vary(0.03), endFreq: 1090, time: 0.1, type: 'sine', volume: 0.04, attack: 0.002 });
+    this.noise({ time: 0.04, volume: 0.14, freq: 900, type: 'bandpass', q: 1.2 });
   }
   guardBreak() {
     if (!this.gate('guardBreak')) return;
@@ -387,6 +410,19 @@ export class Sfx {
         this.tone({ freq: 830 * m, endFreq: 830 * m * 0.995, time: 1.1, type: 'sine', volume: v, delay: d, echo: 0.25 });
       }
     }
+  }
+  /**
+   * The round-start "FIGHT!" call: the recorded fight.mp3 when available. If the file is still
+   * decoding (first round right after the first tap), it waits briefly for it instead of skipping it.
+   */
+  fight() {
+    if (!this.running) return;
+    if (this.hasSample('fight')) { this.gate('fight'); return; }
+    const asked = performance.now();
+    this.whenSamplesReady().then(() => {
+      if (this.hasSample('fight') && performance.now() - asked < 900) this.gate('fight');
+      else { this.announce(); this.say('Fight!'); } // no file: synthesized stinger + voice
+    });
   }
   /** "FIGHT!" stinger. */
   announce() {
