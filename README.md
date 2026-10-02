@@ -38,7 +38,7 @@ The AI shows only its health bar; its stamina and special meters still work, the
 **Look:** the whole game is a notebook come to life - paper page, blue rules, red margin, pen-outlined props and
 stickmen, "boiling" doodles, comic POW! hits and notebook-page menus. Special: golden aura + ring + speed lines and a camera punch-in on activation, KA-POW! burst on hit;
 block: hand-drawn shield (`src/fx/BlockShield.js`) with small sparks on each blocked hit. Effects: `src/fx/Effects.js`. Drawing helpers: `src/style/sketch.js`; arena: `src/arena/Arena.js`;
-UI: `src/ui/hud.css`. Fonts: Permanent Marker and Patrick Hand (SIL OFL, bundled via @fontsource).
+UI: `src/ui/hud.css`. Study-desk props (pencils, markers, erasers, paper balls, clips, ruler, shavings, scraps...) lie around the edges and background: `src/arena/Props.js` (edit `LAYOUT` to add or move things; all baked into 2 draw calls). Fonts: Permanent Marker and Patrick Hand (SIL OFL, bundled via @fontsource).
 
 ## Project layout
 

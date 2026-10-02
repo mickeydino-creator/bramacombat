@@ -3,6 +3,7 @@ import { ARENA_HALF_WIDTH } from '../config/constants.js';
 import {
   PALETTE, paperCanvas, surfaceCanvas, canvasTexture, inkEdges, doodleSprite, doodlePlane, Boil,
 } from '../style/sketch.js';
+import { addDeskProps } from './Props.js';
 
 /*
  * Notebook-page arena: the whole world is drawn on a school notebook.
@@ -99,6 +100,8 @@ export function createArena(scene) {
     d.position.set(x, 0.012, z);
     scene.add(d);
   }
+
+  addDeskProps(scene, boil); // stationery lying around the edges and background
 
   return { sun, update: (dt) => boil.update(dt) };
 }
