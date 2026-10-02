@@ -40,6 +40,19 @@ stickmen, "boiling" doodles, comic POW! hits and notebook-page menus. Special: g
 block: hand-drawn shield (`src/fx/BlockShield.js`) with small sparks on each blocked hit. Effects: `src/fx/Effects.js`. Drawing helpers: `src/style/sketch.js`; arena: `src/arena/Arena.js`;
 UI: `src/ui/hud.css`. Study-desk props (pencils, markers, erasers, paper balls, clips, ruler, shavings, scraps...) lie around the edges and background: `src/arena/Props.js` (edit `LAYOUT` to add or move things; all baked into 2 draw calls). Fonts: Permanent Marker and Patrick Hand (SIL OFL, bundled via @fontsource).
 
+## Fight modes (PLAY -> VS AI -> number of fighters)
+
+- **2 fighters**: the classic 1v1 (YOU vs AI), best of 3, standard arena.
+- **3 fighters**: YOU + 2 AI, free-for-all in a slightly larger arena.
+- **4 fighters**: YOU + 3 AI, free-for-all in a much larger arena (the camera pulls back to keep everybody in view).
+
+In a free-for-all everybody can hit everybody (an attack hits the closest fighter it touches), every AI picks its own target
+(close or hurt fighters, whoever hit it - not only YOU), and the last fighter standing wins the match (one round, no best-of-3).
+The podium ranks fighters by knock-out order (last one down = 2nd, ...). HUD: YOU keep the full bars; each opponent gets one slim
+health bar with its color dot on the right. Everything is table-driven in `src/config/modes.js` (fighters, arena width, spawn points,
+rounds to win, camera range) - add an entry there for another player count or arena size. Extra characters (colors) are in
+`src/config/characters.js`; AI targeting is `AIController.chooseTarget`; the arena resizes via `arena.setHalfWidth()`.
+
 ## Match format
 
 Best of 3: the first fighter to win 2 rounds wins the match (`ROUNDS_TO_WIN` in `src/config/constants.js`), so a match has 2 or 3 rounds.

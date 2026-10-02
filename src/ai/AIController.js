@@ -15,6 +15,11 @@
  *   - Uses its special ability (same stamina + cooldown rules as the player) mostly when it
  *     can realistically land: player in range and recovering, stunned, or not blocking.
  * Every decision has random timing so it isn't fully predictable. Tune with the options below.
+ *
+ * Free-for-all (3 or 4 fighters): every AI has its own instance and picks its own target with chooseTarget() - usually
+ * a close or weakened fighter, sometimes whoever just hit it - so the AIs fight each other, not only YOU. `others`
+ * (the fighters that are not the target) are watched for incoming attacks, and a stuck-in-a-crowd AI jumps over.
+ * With a single opponent none of this applies and the behaviour is exactly the classic 1v1.
  */
 const rand = (a, b) => a + Math.random() * (b - a);
 const randInt = (a, b) => Math.round(rand(a, b));
@@ -51,9 +56,32 @@ export class AIController {
     this.blockDelay = 0;
     this.blockTimer = 0;
     this.pendingAction = null; // forced action for the next 'attack' plan (used for the special)
+    this.target = null; // free-for-all target
+    this.retargetTimer = 0;
+    this.lastX = null;
+    this.stuck = 0;
   }
 
-  getInput(self, opponent) {
+  /**
+   * Free-for-all: pick who to fight. Prefers close, hurt fighters (plus some randomness so AIs spread out instead of
+   * all chasing YOU) and keeps the choice for a couple of seconds. Hits back at whoever just hit us.
+   */
+  chooseTarget(self, enemies) {
+    const alive = enemies.filter((e) => e.alive);
+    if (alive.length <= 1) return alive[0] ?? enemies[0];
+    const hitBack = self.lastAttacker && self.lastAttacker.alive && self.lastAttacker !== this.target && self.time - self.lastHitAt < 0.1 && Math.random() < 0.5;
+    if (this.target?.alive && this.retargetTimer-- > 0 && !hitBack) return this.target;
+    let best = null, bestScore = Infinity;
+    for (const e of alive) {
+      const score = Math.abs(e.x - self.x) + rand(0, 3.2) - (1 - e.health / e.maxHealth) * 2.5 - (e === self.lastAttacker ? 1.2 : 0);
+      if (score < bestScore) { best = e; bestScore = score; }
+    }
+    this.target = hitBack && self.lastAttacker ? self.lastAttacker : best;
+    this.retargetTimer = randInt(80, 190);
+    return this.target;
+  }
+
+  getInput(self, opponent, others = []) {
     const input = { move: 0, jump: false, actions: [] };
     const dx = opponent.x - self.x;
     const dist = Math.abs(dx);
@@ -84,23 +112,32 @@ export class AIController {
     }
     if (!self.canAct) return input; // busy (attacking / hitstun): nothing to decide
 
-    // React once to each new attack the player starts close by.
-    const oppAttack = opponent.state === 'attack' ? opponent.attack : null;
+    // React once to each new attack that starts close by - from the target, or (free-for-all) from anybody facing us.
+    let threat = opponent;
+    let oppAttack = opponent.state === 'attack' ? opponent.attack : null;
+    if (!oppAttack || oppAttack === this.lastSeenAttack) {
+      for (const o of others) {
+        if (o.alive && o.state === 'attack' && o.attack !== this.lastSeenAttack && Math.abs(o.x - self.x) < 2.4 && Math.sign(self.x - o.x) === o.facing) {
+          threat = o; oppAttack = o.attack; break;
+        }
+      }
+    }
+    const tdist = Math.abs(threat.x - self.x);
     if (oppAttack && oppAttack !== this.lastSeenAttack) {
       this.lastSeenAttack = oppAttack;
       const r = Math.random();
       // Blocking costs stamina: don't try when low (same rules as the player).
       const canBlock = !self.guardBroken && self.stamina.value > 20;
-      if (dist < 2.2 && canBlock && r < this.blockChance) {
+      if (tdist < 2.2 && canBlock && r < this.blockChance) {
         this.blockDelay = randInt(...this.blockReaction);
         this.blockTimer = randInt(...this.blockHold);
-      } else if (dist < 2.2 && r < this.blockChance + this.defense) {
+      } else if (tdist < 2.2 && r < this.blockChance + this.defense) {
         this.setPlan(Math.random() < 0.75 ? 'retreat' : 'jumpBack', randInt(14, 26));
       }
     }
 
     // Punish: the first time we see a nearby player attack in recovery, maybe hit back.
-    if (oppAttack && opponent.attackPhase === 'recovery' && oppAttack !== this.lastPunished) {
+    if (oppAttack && threat === opponent && opponent.attackPhase === 'recovery' && oppAttack !== this.lastPunished) {
       this.lastPunished = oppAttack;
       if (this.specialLooksGood(self, opponent, dist) && Math.random() < 0.45) {
         this.pendingAction = this.specialName(self);
@@ -109,6 +146,13 @@ export class AIController {
     }
 
     if (--this.planTimer <= 0) this.decide(self, opponent, dist);
+
+    // Free-for-all: another fighter in the way while walking in -> jump over instead of pushing against it.
+    if (others.length) {
+      this.stuck = this.plan === 'approach' && this.lastX !== null && Math.abs(self.x - this.lastX) < 0.002 ? this.stuck + 1 : 0;
+      this.lastX = self.x;
+      if (this.stuck > 18) { this.stuck = 0; this.setPlan('jumpIn', 1); }
+    }
 
     switch (this.plan) {
       case 'approach':

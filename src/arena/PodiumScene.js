@@ -16,12 +16,24 @@ import { buildProps, PROP_BUILDERS as P } from './Props.js';
 const GROUND = -0.3;
 const BLOCK_W = 2, BLOCK_D = 1.8;
 
-export const PODIUM = {
-  // x of the block center, and the height of its top (= where a fighter's feet stand)
-  first: { x: 0, top: 1.5 },
-  second: { x: 2.05, top: 0.9 },
-  camera: { pos: new THREE.Vector3(1.05, 3.0, 11.4), look: new THREE.Vector3(1.05, 2.0, 0) },
+/*
+ * Podium layouts. slots[rank] = where the fighter in that rank stands: x of the block center and the height of its top
+ * (= where the feet stand). 'duel' (2 fighters) has 1st in the middle and 2nd beside it; 'crowd' (3-4 fighters) adds a
+ * 3rd block on the other side, and a 4th place fighter simply stands on the floor next to it.
+ */
+const PODIUM_LAYOUTS = {
+  duel: {
+    slots: [{ x: 0, top: 1.5 }, { x: 2.05, top: 0.9 }],
+    camera: { pos: new THREE.Vector3(1.05, 3.0, 11.4), look: new THREE.Vector3(1.05, 2.0, 0) },
+    decorX: 0,
+  },
+  crowd: {
+    slots: [{ x: 0, top: 1.5 }, { x: 2.05, top: 0.9 }, { x: -2.05, top: 0.5 }, { x: -4.3, top: GROUND }],
+    camera: { pos: new THREE.Vector3(0, 3.1, 12.6), look: new THREE.Vector3(0, 2.0, 0) },
+    decorX: -1.05,
+  },
 };
+export const podiumLayout = (fighterCount) => (fighterCount > 2 ? PODIUM_LAYOUTS.crowd : PODIUM_LAYOUTS.duel);
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const easeInOut = (t) => t * t * (3 - 2 * t);
@@ -56,7 +68,10 @@ export class PodiumScene {
     const tex = (kind, repeat) => { const t = canvasTexture(surfaceCanvas(kind), repeat); this.textures.push(t); return t; };
     const mat = (kind, repeat) => new THREE.MeshLambertMaterial({ map: tex(kind, repeat) });
     this.blocks = {};
-    for (const [key, spec, numeral, color, size] of [['first', PODIUM.first, '1', PALETTE.red, 1.25], ['second', PODIUM.second, '2', PALETTE.blue, 0.95]]) {
+    const crowd = PODIUM_LAYOUTS.crowd.slots;
+    for (const [key, spec, numeral, color, size] of [
+      ['first', crowd[0], '1', PALETTE.red, 1.25], ['second', crowd[1], '2', PALETTE.blue, 0.95], ['third', crowd[2], '3', '#2f8a46', 0.7],
+    ]) {
       const h = spec.top - GROUND;
       const g = new THREE.Group();
       g.position.x = spec.x;
@@ -75,7 +90,7 @@ export class PodiumScene {
       this.boil.add(n);
       g.add(n);
       this.root.add(g);
-      this.blocks[key] = { group: g, hidden: -(h + 0.3) };
+      this.blocks[key] = { group: g, hidden: -(h + 0.3), active: key !== 'third' };
     }
 
     // decor: doodles, stars, a few paper balls and pencils around the podium
@@ -114,12 +129,23 @@ export class PodiumScene {
     this.reset();
   }
 
+  /** Pick the layout for this many fighters (the 3rd block and the decor position depend on it). */
+  configure(fighterCount) {
+    const layout = podiumLayout(fighterCount);
+    this.blocks.third.active = fighterCount > 2;
+    this.decor.position.x = layout.decorX;
+    this.layout = layout;
+  }
+
   /** Make everything visible once so the renderer compiles shaders / uploads textures before the first transition. */
   prime(renderer, camera) {
+    this.blocks.third.active = true;
     this.setProgress(0.5);
     for (const m of this.scraps) m.visible = true;
     renderer.compile(this.scene, camera);
     for (const t of this.textures) renderer.initTexture?.(t);
+    this.blocks.third.active = false;
+    this.layout = PODIUM_LAYOUTS.duel;
     this.reset();
   }
 
@@ -136,10 +162,10 @@ export class PodiumScene {
 
     // 2. podium blocks rise (runner-up first, then the winner's block, with a little paper "pop")
     this.root.visible = t > 0;
-    for (const [key, from, len] of [['second', 0.22, 0.5], ['first', 0.34, 0.52]]) {
+    for (const [key, from, len] of [['third', 0.14, 0.5], ['second', 0.22, 0.5], ['first', 0.34, 0.52]]) {
       const b = this.blocks[key];
       const p = clamp01((t - from) / len);
-      b.group.visible = p > 0;
+      b.group.visible = p > 0 && b.active;
       b.group.position.y = b.hidden * (1 - easeOutBack(p));
     }
 

@@ -1,5 +1,7 @@
 import { QUALITY_LEVELS } from '../core/Settings.js';
 import { SPECIAL_METER } from '../abilities/specials.js';
+import { FIGHT_MODES, ROSTER } from '../config/modes.js';
+import { CHARACTERS } from '../config/characters.js';
 
 /*
  * Main menu / pause menu / how to play / settings.
@@ -48,7 +50,7 @@ const HOW_TO_PLAY = `
  * that Menu.act() handles (and a callback from Game). Locked modes are shown but can't be entered.
  */
 export const GAME_MODES = [
-  { id: 'ai', title: 'VS AI', desc: 'Fight the computer', available: true, act: 'start' },
+  { id: 'ai', title: 'VS AI', desc: 'Fight the computer', available: true, go: 'fighters' }, // -> choose the number of fighters
   { id: 'multiplayer', title: 'MULTIPLAYER', desc: 'Coming later', available: false },
   { id: 'friends', title: 'VS FRIENDS', desc: 'Coming later', available: false },
 ];
@@ -60,8 +62,12 @@ const LOCK_ICON = `<svg class="lock" viewBox="0 0 32 36" aria-hidden="true">
   <path d="M16 21.5 L16 26.5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
 </svg>`;
 
+// Fighter-count choices come from src/config/modes.js (add a mode there and it shows up here).
+const dot = (key) => `<i class="mdot" style="background:#${CHARACTERS[key].appearance.colors.body.toString(16).padStart(6, '0')}"></i>`;
+const fighterButton = (m) => `<button class="mode" data-act="start" data-count="${m.fighters}"><span class="mode-title">${m.title}<span class="mode-dots">${ROSTER.slice(0, m.fighters).map(dot).join('')}</span></span><span class="mode-desc">${m.desc}</span></button>`;
+
 const modeButton = (m) => m.available
-  ? `<button class="mode" data-act="${m.act}" data-mode="${m.id}"><span class="mode-title">${m.title}</span><span class="mode-desc">${m.desc}</span></button>`
+  ? `<button class="mode" data-go="${m.go}" data-mode="${m.id}"><span class="mode-title">${m.title}</span><span class="mode-desc">${m.desc}</span></button>`
   : `<button class="mode locked" data-locked="${m.id}" aria-disabled="true"><span class="mode-title">${m.title}</span>`
     + `<span class="mode-desc">${LOCK_ICON}${m.desc}</span></button>`;
 
@@ -82,6 +88,11 @@ export class Menu {
         <h2>GAME MODE</h2>
         ${GAME_MODES.map(modeButton).join('\n        ')}
         <p class="mode-note" aria-live="polite"></p>
+        <button data-act="back" class="back">BACK</button>
+      </div>
+      <div class="menu-screen" data-screen="fighters">
+        <h2>FIGHTERS</h2>
+        ${Object.values(FIGHT_MODES).map(fighterButton).join('\n        ')}
         <button data-act="back" class="back">BACK</button>
       </div>
       <div class="menu-screen" data-screen="pause">
@@ -118,7 +129,7 @@ export class Menu {
       if (b.dataset.locked) this.locked(b);
       else if (b.dataset.go) this.show(b.dataset.go);
       else if (b.dataset.quality) this.settings.set('quality', b.dataset.quality);
-      else this.act(b.dataset.act);
+      else this.act(b.dataset.act, +b.dataset.count || undefined);
     });
     for (const input of el.querySelectorAll('input[type=range]')) {
       input.addEventListener('input', () => this.settings.set(input.dataset.setting, +input.value));
@@ -133,8 +144,8 @@ export class Menu {
   get visible() { return this.stack.length > 0; }
   get current() { return this.stack[this.stack.length - 1]; }
 
-  act(a) {
-    if (a === 'start') { this.close(); this.onStart(); }
+  act(a, count) {
+    if (a === 'start') { this.close(); this.onStart(count); }
     else if (a === 'resume') { this.close(); this.onResume(); }
     else if (a === 'restart') { this.close(); this.onRestart(); }
     else if (a === 'mainmenu') this.onMainMenu();

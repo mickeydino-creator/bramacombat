@@ -60,6 +60,8 @@ export class Fighter {
     this.stamina.reset();
     this.specials.reset();
     this.time = 0;
+    this.lastAttacker = null; // who hit me last (AI uses it to hit back in free-for-all)
+    this.lastHitAt = -99;
     this.model.reset?.();
   }
 
@@ -252,7 +254,7 @@ export class Fighter {
       }
     }
 
-    const limit = ARENA_HALF_WIDTH;
+    const limit = this.arenaLimit ?? ARENA_HALF_WIDTH; // set per fight mode by Game
     if (this.x < -limit) { this.x = -limit; this.vx = Math.max(0, this.vx); }
     if (this.x > limit) { this.x = limit; this.vx = Math.min(0, this.vx); }
   }
@@ -288,6 +290,8 @@ export class Fighter {
     this.attack = null; // getting hit interrupts your own attack
     this.buffer = null;
     this.facing = -attacker.facing; // turn toward the attacker
+    this.lastAttacker = attacker;
+    this.lastHitAt = this.time;
     if (blocked) {
       this.vx = attacker.facing * move.knockback.x * BLOCK_PUSHBACK;
     } else {

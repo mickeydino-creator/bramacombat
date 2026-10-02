@@ -113,6 +113,17 @@ export const CHARACTERS = {
     name: 'VOLT',
     appearance: { colors: { body: 0x1f5fc8 } },
   }),
+
+  // Extra opponents for the 3 / 4 fighter free-for-all modes (same stats, only the color differs).
+  moss: defineFighter({
+    name: 'MOSS',
+    appearance: { colors: { body: 0x2f9a4a } },
+  }),
+
+  plum: defineFighter({
+    name: 'PLUM',
+    appearance: { colors: { body: 0x8040b8 } },
+  }),
 };
 
 /*

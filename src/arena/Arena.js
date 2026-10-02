@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { ARENA_HALF_WIDTH } from '../config/constants.js';
 import {
   PALETTE, paperCanvas, surfaceCanvas, canvasTexture, inkEdges, doodleSprite, doodlePlane, Boil,
 } from '../style/sketch.js';
@@ -11,7 +10,7 @@ import { addDeskProps } from './Props.js';
  * - floor: ruled paper that fades into the page; fighting platform: graph paper
  * - props: white "paper" boxes with rough ink outlines and pencil hatching
  * - doodles: stars, arrows, scribbles... that "boil" like hand-drawn animation
- * Returns { sun, update(dt) }.
+ * Returns { sun, stage, boil, setHalfWidth(w), update(dt) }.
  */
 export function createArena(scene) {
   const paperHex = new THREE.Color(PALETTE.paper);
@@ -43,36 +42,89 @@ export function createArena(scene) {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // Fighting platform: a sheet of graph paper with an inked border
-  const platform = inkEdges(new THREE.Mesh(
-    new THREE.BoxGeometry(ARENA_HALF_WIDTH * 2 + 1.5, 0.3, 5),
-    [paperMat('hatch', [6, 0.4]), paperMat('hatch', [6, 0.4]), paperMat('grid', [8, 3]), paperMat('grid'), paperMat('hatch', [6, 0.4]), paperMat('hatch', [6, 0.4])],
-  ), { jitter: 0.02 });
-  platform.position.y = -0.15;
-  platform.receiveShadow = true;
-  stage.add(platform);
-
-  // Red pen "front line" across the floor
-  const lineMat = new THREE.MeshBasicMaterial({ color: PALETTE.red });
-  const line = new THREE.Mesh(new THREE.BoxGeometry(ARENA_HALF_WIDTH * 2 + 1.5, 0.02, 0.05), lineMat);
-  line.position.set(0, 0.01, 1.2);
-  stage.add(line);
-
   const boil = new Boil([], 4); // gentle line boil
 
-  // Boundary posts: pencil-sketched columns with doodle stars on top
-  const postMat = paperMat('crosshatch', [1, 4]);
-  for (const side of [-1, 1]) {
-    for (const z of [-1.8, 1.8]) {
-      const p = inkEdges(new THREE.Mesh(new THREE.BoxGeometry(0.5, 4, 0.5), postMat));
-      p.position.set(side * (ARENA_HALF_WIDTH + 0.9), 2, z);
-      p.castShadow = p.receiveShadow = true;
-      stage.add(p);
-      const star = boil.add(doodleSprite('star', { color: PALETTE.ink, fill: PALETTE.yellow }, 0.8));
-      star.position.set(side * (ARENA_HALF_WIDTH + 0.9), 4.5, z);
-      stage.add(star);
+  // The part of the stage that depends on the fight mode's arena width: platform, front line, posts, floor arrows.
+  // setHalfWidth() rebuilds it (1v1 = 7.5, bigger for 3 / 4 fighters - see src/config/modes.js).
+  const flex = new THREE.Group();
+  stage.add(flex);
+  let halfWidth = null;
+  const owned = []; // geometries / materials / textures of the current build, disposed on rebuild
+
+  function build(hw) {
+    for (const child of [...flex.children]) {
+      flex.remove(child);
+      child.traverse((o) => { o.geometry?.dispose(); if (o.userData.frames) boil.objs.splice(boil.objs.indexOf(o), 1); });
     }
+    for (const d of owned.splice(0)) d.dispose();
+    halfWidth = hw;
+    const f = (hw * 2 + 1.5) / (7.5 * 2 + 1.5); // texture repeat grows with the platform, so paper cells keep their size
+    const mat = (kind, repeat) => {
+      const tex = canvasTexture(surfaceCanvas(kind), repeat && [repeat[0] * f, repeat[1]]);
+      const m = new THREE.MeshLambertMaterial({ map: tex });
+      owned.push(tex, m);
+      return m;
+    };
+
+    // Fighting platform: a sheet of graph paper with an inked border
+    const platform = inkEdges(new THREE.Mesh(
+      new THREE.BoxGeometry(hw * 2 + 1.5, 0.3, 5),
+      [mat('hatch', [6, 0.4]), mat('hatch', [6, 0.4]), mat('grid', [8, 3]), mat('grid', [f, 1]), mat('hatch', [6, 0.4]), mat('hatch', [6, 0.4])],
+    ), { jitter: 0.02 });
+    platform.position.y = -0.15;
+    platform.receiveShadow = true;
+    flex.add(platform);
+
+    // Red pen "front line" across the floor
+    const lineMat = new THREE.MeshBasicMaterial({ color: PALETTE.red });
+    owned.push(lineMat);
+    const line = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 1.5, 0.02, 0.05), lineMat);
+    line.position.set(0, 0.01, 1.2);
+    flex.add(line);
+
+    // Boundary posts: pencil-sketched columns with doodle stars on top
+    const postMat = mat('crosshatch', [1, 4]);
+    for (const side of [-1, 1]) {
+      for (const z of [-1.8, 1.8]) {
+        const p = inkEdges(new THREE.Mesh(new THREE.BoxGeometry(0.5, 4, 0.5), postMat));
+        p.position.set(side * (hw + 0.9), 2, z);
+        p.castShadow = p.receiveShadow = true;
+        flex.add(p);
+        const star = boil.add(doodleSprite('star', { color: PALETTE.ink, fill: PALETTE.yellow }, 0.8));
+        star.position.set(side * (hw + 0.9), 4.5, z);
+        flex.add(star);
+      }
+    }
+
+    // Floor doodles on the platform (arrows, X mark)
+    const floor = [
+      ['arrow', [-hw + 1, 2.0], 1.4, PALETTE.blue, 0.2], ['arrow', [hw - 1, 2.0], 1.4, PALETTE.blue, Math.PI - 0.2],
+      ['x', [0, 2.1], 0.6, PALETTE.red, 0],
+    ];
+    for (const [kind, [x, z], scale, color, rot] of floor) {
+      const d = boil.add(doodlePlane(kind, { color, width: 6, opacity: 0.6 }, scale));
+      d.rotation.set(-Math.PI / 2, 0, rot);
+      d.position.set(x, 0.012, z);
+      flex.add(d);
+    }
+
+    // A wider arena shows more of the backdrop: a few extra sketched buildings further out
+    if (hw > 10) {
+      const bm = mat('hatch', [1, 2]);
+      for (const i of [-10, -8, 8, 10]) {
+        const h = 1.8 + ((Math.abs(i) * 7919) % 5) * 0.6;
+        const b = inkEdges(new THREE.Mesh(new THREE.BoxGeometry(2.4, h, 1.5), bm), { jitter: 0.03 });
+        b.position.set(i * 3.4, h / 2 - 0.3, -12 - Math.abs(i) * 0.3);
+        flex.add(b);
+      }
+    }
+
+    // The shadow camera has to cover the whole platform
+    const sc = sun.shadow.camera;
+    sc.left = -(hw + 4.5); sc.right = hw + 4.5;
+    sc.updateProjectionMatrix();
   }
+  build(7.5);
 
   // Backdrop: sketched buildings / hills drawn on the page
   const bldgMat = paperMat('hatch', [1, 2]);
@@ -95,18 +147,12 @@ export function createArena(scene) {
     d.position.set(...pos);
     scene.add(d);
   }
-  const floor = [
-    ['arrow', [-ARENA_HALF_WIDTH + 1, 2.0], 1.4, PALETTE.blue, 0.2], ['arrow', [ARENA_HALF_WIDTH - 1, 2.0], 1.4, PALETTE.blue, Math.PI - 0.2],
-    ['x', [0, 2.1], 0.6, PALETTE.red, 0],
-  ];
-  for (const [kind, [x, z], scale, color, rot] of floor) {
-    const d = boil.add(doodlePlane(kind, { color, width: 6, opacity: 0.6 }, scale));
-    d.rotation.set(-Math.PI / 2, 0, rot);
-    d.position.set(x, 0.012, z);
-    stage.add(d);
-  }
-
   addDeskProps(scene, boil); // stationery lying around the edges and background
 
-  return { sun, stage, boil, update: (dt) => boil.update(dt) };
+  return {
+    sun, stage, boil,
+    /** Resize the playing area (platform, posts, shadows). Rebuilds only when the width changes. */
+    setHalfWidth(hw) { if (hw !== halfWidth) build(hw); },
+    update: (dt) => boil.update(dt),
+  };
 }

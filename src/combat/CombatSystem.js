@@ -11,11 +11,17 @@ export const overlaps = (a, b) =>
 export function resolveHits(fighters) {
   const hits = [];
   for (const attacker of fighters) {
-    const defender = fighters.find((f) => f !== attacker);
     const hitbox = attacker.getActiveHitbox();
-    if (!hitbox || !defender.alive) continue;
-    const hurtbox = defender.getHurtbox();
-    if (!overlaps(hitbox, hurtbox)) continue;
+    if (!hitbox) continue;
+    // With more than two fighters an attack hits the closest living fighter it touches (still at most once).
+    let defender = null, hurtbox = null;
+    for (const f of fighters) {
+      if (f === attacker || !f.alive) continue;
+      const box = f.getHurtbox();
+      if (!overlaps(hitbox, box)) continue;
+      if (!defender || Math.abs(f.x - attacker.x) < Math.abs(defender.x - attacker.x)) { defender = f; hurtbox = box; }
+    }
+    if (!defender) continue;
     attacker.attack.hasHit = true;
     hits.push({
       attacker,
@@ -30,6 +36,16 @@ export function resolveHits(fighters) {
   }
   for (const h of hits) h.damage = h.defender.takeHit(h.move, h.attacker);
   return hits;
+}
+
+/** Keeps every pair of fighters from walking through each other (they can still jump over). Fighters that are down can be skipped. */
+export function resolvePushAll(fighters, pushWidth, pushHeight, arenaHalfWidth, solid = (f) => true) {
+  const list = fighters.filter(solid);
+  for (let pass = 0; pass < 2; pass++) { // 2 passes settle a crowd (chains of pushes)
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) resolvePush(list[i], list[j], pushWidth, pushHeight, arenaHalfWidth);
+    }
+  }
 }
 
 /** Keeps fighters from walking through each other (they can still jump over). */

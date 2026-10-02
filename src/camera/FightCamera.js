@@ -11,6 +11,7 @@ export class FightCamera {
     this.shakeTime = 0;
     this.shakeAmount = 0;
     this.camera.position.set(0, 2.6, 9);
+    this.maxZoom = 15; // how far it may pull back (larger arenas / more fighters raise it, see src/config/modes.js)
   }
 
   /** Podium framing: { pos: Vector3, look: Vector3 } (null = normal fight camera). The camera glides there smoothly. */
@@ -24,7 +25,8 @@ export class FightCamera {
     this.shakeTime = Math.max(this.shakeTime, time);
   }
 
-  update(a, b, dt, snap = false) {
+  /** a, b: the outermost fighters to keep in view (left / right); yMax: highest jump among everyone in view. */
+  update(a, b, dt, snap = false, yMax = Math.max(a.y, b.y)) {
     if (this.podium) { // glide to the podium shot (slower than the fight camera, so it feels like a camera move)
       const t = snap ? 1 : 1 - Math.exp(-dt * 3.2);
       this.camera.position.lerp(this.podium.pos, t);
@@ -33,9 +35,9 @@ export class FightCamera {
       return;
     }
     const midX = (a.x + b.x) / 2;
-    const midY = Math.max(a.y, b.y) * 0.4;
+    const midY = yMax * 0.4;
     const dist = Math.abs(a.x - b.x);
-    const zoom = THREE.MathUtils.clamp(6.5 + dist * 0.75, 7.5, 15);
+    const zoom = THREE.MathUtils.clamp(6.5 + dist * 0.75, 7.5, this.maxZoom);
 
     this.kickAmount = (this.kickAmount || 0) * Math.exp(-dt * 7);
     const z = zoom - (this.kickAmount || 0);

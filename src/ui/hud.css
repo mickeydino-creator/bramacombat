@@ -255,7 +255,10 @@ body.touch .help { display: none; }
 }
 
 /* ---------------- Game modes (PLAY) ---------------- */
-.menu-screen[data-screen=modes] { width: min(480px, 90vw); }
+.menu-screen[data-screen=modes], .menu-screen[data-screen=fighters] { width: min(480px, 90vw); }
+.mode-title { display: flex; align-items: center; gap: 12px; align-self: stretch; }
+.mode-dots { display: inline-flex; gap: 5px; margin-left: auto; }
+.mdot { width: 15px; height: 15px; border-radius: 50%; border: 2.5px solid var(--ink); box-shadow: 1px 1px 0 rgba(37, 37, 46, 0.35); }
 .menu-screen button.mode { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 18px; text-align: left; }
 .mode-title { font: clamp(24px, 4.4vmin, 32px)/1 var(--marker); }
 .mode-desc { display: flex; align-items: center; gap: 6px; font: clamp(15px, 2.6vmin, 18px)/1.1 var(--hand); color: var(--pencil); }
@@ -309,3 +312,22 @@ body.touch .help { display: none; }
   .pips i { width: 10px; height: 10px; border-width: 2px; }
 }
 @media (max-height: 500px) { .overlay.podium .brand { display: none; } }
+
+/* ---------------- Free-for-all HUD (3-4 fighters): YOU on the left, slim health bars for the opponents on the right ---------------- */
+.opps { display: none; flex: 1; max-width: 300px; flex-direction: column; align-items: flex-end; gap: 7px; padding-top: 2px; }
+.hud.multi .bar-wrap.p2 { display: none; }
+.hud.multi .opps { display: flex; }
+.hud.multi .pips { display: none; }
+.opp { display: flex; align-items: center; gap: 7px; width: 100%; transition: opacity 0.3s; }
+.opp .bar { flex: 1; height: 15px; border-width: 2.5px; border-radius: var(--sketch-2); }
+.opp .bar .lag, .opp .bar .fill { left: auto; right: 0; }
+.opp .onm { font: 17px/1 var(--marker); color: var(--ink); min-width: 38px; text-align: right; transform: rotate(1.5deg); }
+.opp .odot { width: 13px; height: 13px; border-radius: 50%; border: 2.5px solid var(--ink); flex: none; box-shadow: 1px 1px 0 rgba(37, 37, 46, 0.35); }
+.opp.out { opacity: 0.38; }
+.opp.out .onm { text-decoration: line-through; }
+@media (max-height: 500px) {
+  .opps { gap: 4px; }
+  .opp .bar { height: 11px; border-width: 2px; }
+  .opp .onm { font-size: 13px; min-width: 30px; }
+  .opp .odot { width: 10px; height: 10px; border-width: 2px; }
+}
