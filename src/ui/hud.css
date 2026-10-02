@@ -122,6 +122,7 @@ canvas { display: block; }
 .overlay .winner::before, .overlay .winner::after { content: ''; position: absolute; width: 90px; height: 26px; background: rgba(255, 240, 160, 0.75);
   top: -12px; left: 20px; transform: rotate(-8deg); }
 .overlay .winner::after { left: auto; right: 20px; transform: rotate(7deg); }
+.overlay .brand { font: 26px/1 var(--marker); color: var(--paper); letter-spacing: 0.12em; text-shadow: 2px 2px 0 var(--ink); transform: rotate(-2deg); margin-bottom: 14px; opacity: 0.9; }
 .overlay-buttons { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
 .overlay button { font: 30px var(--marker); padding: 10px 34px; cursor: pointer; color: var(--ink); background: var(--paper);
   border: 3px solid var(--ink); border-radius: var(--sketch); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4); }
@@ -232,6 +233,7 @@ body.touch .help { display: none; }
   .special-label .meter-name { font-size: 11px; }
   .message { font-size: 60px; }
   .overlay .winner { font-size: 48px; padding: 16px 30px 14px 64px; }
+  .overlay .brand { font-size: 18px; }
   .overlay button { font-size: 22px; padding: 6px 22px; }
   .menu-screen { gap: 6px; padding: 14px 20px 14px 66px; }
   .menu-screen button { padding: 5px 12px; font-size: 20px; }

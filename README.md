@@ -1,4 +1,4 @@
-# Bramacombat - 3D fighting prototype
+# Doodle Brawl - 3D fighting prototype
 
 Playable 1v1 (player vs AI) fighting game prototype. Three.js + Vite, plain JavaScript (ES modules).
 

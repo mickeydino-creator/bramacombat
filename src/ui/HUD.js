@@ -10,7 +10,7 @@ export class HUD {
       </div>
       <div class="message"></div>
       <button type="button" class="pause-btn" aria-label="Pause">II</button>
-      <div class="overlay"><div class="winner"></div><div class="overlay-buttons"><button type="button" data-act="restart" class="primary">RESTART</button><button type="button" data-act="menu">MAIN MENU</button></div></div>`;
+      <div class="overlay"><div class="brand">DOODLE BRAWL</div><div class="winner"></div><div class="overlay-buttons"><button type="button" data-act="restart" class="primary">RESTART</button><button type="button" data-act="menu">MAIN MENU</button></div></div>`;
     document.body.appendChild(el);
     this.el = el;
     this.bars = ['.p1', '.p2'].map((s) => ({

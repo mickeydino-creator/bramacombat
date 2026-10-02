@@ -73,7 +73,7 @@ export class Menu {
     el.className = 'menu-root';
     el.innerHTML = `
       <div class="menu-screen" data-screen="main">
-        <h1 class="logo">BRAMA<span>COMBAT</span></h1>
+        <h1 class="logo">DOODLE<span>BRAWL</span></h1>
         <button data-go="modes" class="primary">PLAY</button>
         <button data-go="howto">HOW TO PLAY</button>
         <button data-go="settings">SETTINGS</button>
