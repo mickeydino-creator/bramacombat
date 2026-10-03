@@ -68,6 +68,7 @@ export const TIMING = Object.freeze({
 
 /** Machine-readable error codes with the messages players see. */
 export const ERRORS = Object.freeze({
+  NAME_REQUIRED: 'Enter your name first.',
   INVALID_CODE: 'That room code does not look right. Room codes have 4 letters or numbers.',
   ROOM_NOT_FOUND: 'Room not found. Check the code and try again.',
   ROOM_FULL: 'This room is full (4 players maximum).',

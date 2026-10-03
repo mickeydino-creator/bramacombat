@@ -232,3 +232,20 @@ test('version mismatch and ping/pong', async () => {
     assert.equal((await c.next('pong')).ts, 42);
   } finally { s.stop(); }
 });
+
+test('players must give a name; duplicate names get a number', async () => {
+  const s = await boot();
+  try {
+    const bad = await connect(s.url);
+    bad.send({ t: 'create', type: 'online', v: PROTOCOL_VERSION });
+    assert.equal((await bad.next('error')).code, 'NAME_REQUIRED');
+    const { joined } = await mkRoom(s.url);
+    const noName = await connect(s.url);
+    noName.send({ t: 'join', code: joined.code, role: 'player', name: '   ', v: PROTOCOL_VERSION });
+    assert.equal((await noName.next('error')).code, 'NAME_REQUIRED');
+    const a = await joinRoom(s.url, joined.code, 'player', 'Host'); // same name as the host
+    assert.equal((await a.next('joined')).you.name, 'Host 2');
+    const b = await joinRoom(s.url, joined.code, 'player', 'Host');
+    assert.equal((await b.next('joined')).you.name, 'Host 3');
+  } finally { s.stop(); }
+});

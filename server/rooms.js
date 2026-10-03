@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { WebSocketServer } from 'ws';
 import {
-  PROTOCOL_VERSION, MAX_PLAYERS, MIN_PLAYERS_TO_START, ROOM_TYPES, ROLES, CODE_ALPHABET, CODE_LENGTH,
+  PROTOCOL_VERSION, MAX_PLAYERS, MAX_NAME_LENGTH, MIN_PLAYERS_TO_START, ROOM_TYPES, ROLES, CODE_ALPHABET, CODE_LENGTH,
   TIMING, normalizeCode, isValidCode, sanitizeName, sanitizeInput, errorMessage, CLOSE_REASONS,
 } from '../shared/protocol.js';
 
@@ -158,16 +158,26 @@ export class RoomServer {
     };
   }
 
+  /** Names identify fighters, so two players never share one: a second "Alex" becomes "Alex 2". */
+  uniqueName(room, name) {
+    const taken = new Set(room.members.filter((m) => m && !m.gone).map((m) => m.name.toLowerCase()));
+    let out = name;
+    for (let n = 2; taken.has(out.toLowerCase()); n++) out = `${name.slice(0, MAX_NAME_LENGTH - String(n).length - 1)} ${n}`;
+    return out;
+  }
+
   onCreate(conn, msg) {
     if (conn.room) { this.error(conn, 'BAD_MESSAGE'); return; }
     if (msg.v !== PROTOCOL_VERSION) { this.error(conn, 'VERSION'); return; }
     const type = Object.values(ROOM_TYPES).includes(msg.type) ? msg.type : null;
     if (!type) { this.error(conn, 'BAD_MESSAGE'); return; }
     if (this.rooms.size >= this.maxRooms) { this.error(conn, 'SERVER_BUSY'); return; }
+    const name = sanitizeName(msg.name, '');
+    if (!name) { this.error(conn, 'NAME_REQUIRED'); return; }
     const code = this.newCode();
     if (!code) { this.error(conn, 'SERVER_BUSY'); return; }
     const room = { code, type, state: 'lobby', members: [], startInfo: null, matchId: 0, createdAt: Date.now(), hostDropAt: 0, notice: null };
-    const host = this.newMember(room, ROLES.HOST, sanitizeName(msg.name, 'HOST'), conn);
+    const host = this.newMember(room, ROLES.HOST, name, conn);
     room.members.push(host);
     this.reindex(room);
     this.rooms.set(code, room);
@@ -188,7 +198,9 @@ export class RoomServer {
     if (room.state === 'playing') { this.error(conn, 'GAME_IN_PROGRESS'); return; }
     const live = room.members.filter((m) => m && !m.gone);
     if (live.length >= MAX_PLAYERS) { this.error(conn, 'ROOM_FULL'); return; }
-    const member = this.newMember(room, role, sanitizeName(msg.name, `PLAYER ${live.length + 1}`), conn);
+    const name = sanitizeName(msg.name, '');
+    if (!name) { this.error(conn, 'NAME_REQUIRED'); return; }
+    const member = this.newMember(room, role, this.uniqueName(room, name), conn);
     room.members.push(member);
     this.reindex(room);
     this.attach(conn, room, member);

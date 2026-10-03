@@ -23,6 +23,17 @@ Camera/wake-lock features on phones need HTTPS on a real deployment (the wake lo
 If the page and the room server live on different hosts, build with `VITE_SERVER_URL=wss://...` (see `.env.example`).
 Server settings (`PORT`, `HOST`, `ALLOWED_ORIGINS`, `MAX_ROOMS`, `NET_LOG`) are read from the environment. `GET /health` answers `ok`.
 
+## Names and the shared HUD
+
+- Everyone types a name before joining (phones and online players, and the host when creating a room). The server rejects an empty
+  name and numbers duplicates ("Alex", "Alex 2"). There are no P1 / P2 labels anywhere.
+- In a VS FRIENDS match every screen shows one card per player - name, health, stamina and special meter - in room order. Your own
+  card has a YOU badge and a coloured frame; a knocked-out player's card is dimmed with OUT, a reconnecting player shows "...".
+  Small name tags float above the other fighters (you have the YOU arrow).
+- The cards read the real fighter state (`HUD.configureShared` in `src/ui/HUD.js`, fed from `Game.render`). On the host that is
+  the simulation; on online clients it is the host's snapshot. There is no second HUD state. VS AI keeps its own HUD.
+- The phone controller only shows your name, a health strip and the buttons: the main screen is the match HUD.
+
 ## Architecture
 
 - `shared/protocol.js` - wire protocol (documented in its header), limits, timings, error texts. Used by server and browser.

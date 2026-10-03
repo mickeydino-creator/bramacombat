@@ -21,6 +21,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const SCREENS = `
   <div class="menu-screen" data-screen="friends">
     <h2>VS FRIENDS</h2>
+    <label class="field">YOUR NAME<input class="name-input" type="text" maxlength="10" autocomplete="off" spellcheck="false" placeholder="Enter your name" aria-label="Your name"></label>
     <button class="mode" data-act="net-phone"><span class="mode-title">PHONE CONTROLLERS</span><span class="mode-desc">Play together on this computer. Friends use their phones as controllers.</span></button>
     <button class="mode" data-go="online"><span class="mode-title">ONLINE MULTIPLAYER</span><span class="mode-desc">Friends join from their own devices over the internet.</span></button>
     <p class="net-status" data-status="friends" aria-live="polite"></p>
@@ -28,6 +29,7 @@ const SCREENS = `
   </div>
   <div class="menu-screen" data-screen="online">
     <h2>ONLINE</h2>
+    <label class="field">YOUR NAME<input class="name-input" type="text" maxlength="10" autocomplete="off" spellcheck="false" placeholder="Enter your name" aria-label="Your name"></label>
     <button class="mode" data-act="net-create"><span class="mode-title">CREATE ROOM</span><span class="mode-desc">You host. Share the code or QR with friends.</span></button>
     <button class="mode" data-go="join"><span class="mode-title">JOIN ROOM</span><span class="mode-desc">Enter a friend's room code.</span></button>
     <p class="net-status" data-status="online" aria-live="polite"></p>
@@ -36,7 +38,7 @@ const SCREENS = `
   <div class="menu-screen" data-screen="join">
     <h2>JOIN ROOM</h2>
     <label class="field">ROOM CODE<input class="code-input" type="text" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD" aria-label="Room code"></label>
-    <label class="field">YOUR NAME<input class="name-input" type="text" maxlength="10" autocomplete="off" spellcheck="false" placeholder="PLAYER" aria-label="Your name"></label>
+    <label class="field">YOUR NAME<input class="name-input" type="text" maxlength="10" autocomplete="off" spellcheck="false" placeholder="Enter your name" aria-label="Your name"></label>
     <p class="net-status" data-status="join" aria-live="polite"></p>
     <button data-act="net-join" class="primary">JOIN</button>
     <button data-act="back" class="back">BACK</button>
@@ -81,17 +83,28 @@ export class NetMenu {
     });
     const root = this.menu.el;
     this.codeInput = root.querySelector('.code-input');
-    this.nameInput = root.querySelector('.name-input');
+    this.nameInputs = [...root.querySelectorAll('.name-input')]; // one on each screen that needs a name; they mirror each other
     this.codeInput.addEventListener('input', () => { this.codeInput.value = normalizeCode(this.codeInput.value); });
-    this.nameInput.value = this.savedName();
-    this.nameInput.addEventListener('change', () => this.saveName());
+    this.nameInputs.forEach((input) => {
+      input.value = this.savedName();
+      input.addEventListener('input', () => { this.nameInputs.forEach((o) => { if (o !== input) o.value = input.value; }); });
+      input.addEventListener('change', () => this.saveName());
+    });
   }
 
   get session() { return this.game.session; }
 
   savedName() { try { return localStorage.getItem(NAME_KEY) || ''; } catch { return ''; } }
-  saveName() { try { localStorage.setItem(NAME_KEY, sanitizeName(this.nameInput.value, '')); } catch { /* private mode */ } }
-  playerName(fallback) { return sanitizeName(this.nameInput.value || this.savedName(), fallback); }
+  saveName() { try { localStorage.setItem(NAME_KEY, this.playerName()); } catch { /* private mode */ } }
+  /** The name typed on any of the name fields ('' when empty: a name is required before joining a room). */
+  playerName() { return sanitizeName(this.nameInputs.find((i) => i.value.trim())?.value ?? '', ''); }
+  /** Name check before creating / joining: shows the message on the screen the player is on. */
+  needName(screen) {
+    if (this.playerName()) return false;
+    this.status(screen, errorMessage('NAME_REQUIRED'), 'error');
+    this.menu.el.querySelector(`[data-screen=${screen}] .name-input`)?.focus();
+    return true;
+  }
 
   status(screen, text, tone = '') {
     const el = this.menu.el.querySelector(`[data-status="${screen}"]`);
@@ -112,9 +125,11 @@ export class NetMenu {
 
   /** CREATE ROOM / PHONE CONTROLLERS: make the room, then show the lobby. Errors stay on the screen the player pressed on. */
   async createRoom(type, fromScreen) {
+    if (this.needName(fromScreen)) return;
+    this.saveName();
     this.status(fromScreen, 'Creating room...', 'busy');
     const session = this.freshSession();
-    const ok = await session.createRoom(type, this.playerName('HOST'));
+    const ok = await session.createRoom(type, this.playerName());
     if (!ok) {
       this.game.session = null;
       this.status(fromScreen, session.error?.message ?? errorMessage('CONNECTION_FAILED'), 'error');
@@ -128,6 +143,7 @@ export class NetMenu {
   async joinFromForm() {
     const code = normalizeCode(this.codeInput.value);
     if (!isValidCode(code)) { this.status('join', errorMessage('INVALID_CODE'), 'error'); this.codeInput.focus(); return; }
+    if (this.needName('join')) return;
     this.saveName();
     await this.join(code);
   }
@@ -135,7 +151,7 @@ export class NetMenu {
   async join(code) {
     this.status('join', `Joining room ${code}...`, 'busy');
     const session = this.freshSession();
-    const ok = await session.joinRoom(code, ROLES.PLAYER, this.playerName('PLAYER'));
+    const ok = await session.joinRoom(code, ROLES.PLAYER, this.playerName());
     if (!ok) {
       this.game.session = null;
       this.status('join', session.error?.message ?? errorMessage('CONNECTION_FAILED'), 'error');
@@ -151,7 +167,9 @@ export class NetMenu {
     this.codeInput.value = normalizeCode(code);
     this.menu.show('join', true);
     this.status('join', '');
-    if (isValidCode(this.codeInput.value)) this.join(this.codeInput.value);
+    // With a saved name the link joins straight away; a first-time player types their name first.
+    if (isValidCode(this.codeInput.value) && this.playerName()) this.join(this.codeInput.value);
+    else this.nameInputs.find((i) => i.closest('[data-screen=join]'))?.focus();
   }
 
   /** Page reload while in a room: put the player back where they were. */

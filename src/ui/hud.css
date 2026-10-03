@@ -288,7 +288,7 @@ body.touch .help { display: none; }
 .pips i.on { background: var(--yellow); transform: scale(1.18); box-shadow: 1px 1px 0 rgba(37, 37, 46, 0.35); }
 .p2 .name { display: inline-flex; align-items: center; flex-direction: row-reverse; }
 .hud .bars { transition: opacity 0.4s; }
-.hud.dim .bars, .hud.dim .pause-btn { opacity: 0; }
+.hud.dim .bars, .hud.dim .roster, .hud.dim .pause-btn { opacity: 0; }
 
 .page-wipe { position: fixed; inset: 0; z-index: 30; pointer-events: none; display: none; background: var(--notebook);
   box-shadow: -14px 0 30px rgba(0, 0, 0, 0.28); }
@@ -406,3 +406,47 @@ body.touch .help { display: none; }
 .overlay.no-restart [data-act=restart] { display: none; }
 .overlay.no-restart .waiting-host { display: block; }
 .overlay.podium .waiting-host { color: var(--ink); text-shadow: 1px 1px 0 var(--yellow); font-size: 18px; margin: 0; }
+
+/* ---------------- Shared match (VS FRIENDS): one card per player - name, health, stamina, special ---------------- */
+.roster { display: none; gap: 8px; padding: calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 16px) 0 calc(env(safe-area-inset-left) + 16px); }
+.hud.shared .bars { display: none; }
+.hud.shared .roster { display: flex; }
+.roster .card { flex: 1 1 0; min-width: 0; max-width: 300px; padding: 4px 8px 6px; background: rgba(247, 242, 227, 0.72); border: 2.5px solid var(--ink);
+  border-radius: var(--sketch); box-shadow: 3px 3px 0 rgba(37, 37, 46, 0.22); transition: opacity 0.3s; }
+.roster .card.after-gap { margin-left: 56px; }
+.hud.duel .roster .card:first-child { margin-right: auto; }
+.hud.duel .roster .card.after-gap { margin-left: auto; }
+.roster .card.you { border-color: var(--tint, var(--blue)); box-shadow: 3px 3px 0 var(--tint, var(--blue)); background: rgba(255, 252, 238, 0.9); }
+.cname { display: flex; align-items: center; gap: 6px; font: 21px/1.1 var(--marker); margin-bottom: 3px; min-width: 0; }
+.cname .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cname .cdot { width: 13px; height: 13px; border-radius: 50%; border: 2.5px solid var(--ink); flex: none; }
+.cname .you { display: none; font: 12px/1 var(--hand); font-style: normal; font-weight: bold; padding: 2px 5px; border-radius: var(--sketch); background: var(--red); color: #fff; flex: none; }
+.roster .card.you .you { display: inline-block; }
+.cname .pips { display: none; margin: 0 0 0 auto; }
+.hud.duel .cname .pips { display: inline-flex; }
+.cname .cstate { margin-left: auto; font: 13px var(--marker); color: var(--red); flex: none; }
+.hud.duel .cname .cstate { margin-left: 6px; }
+.roster .row { gap: 5px; }
+.roster .row.st, .roster .row.sp { width: 100%; margin-top: 4px; }
+.roster .row .bar, .roster .row .meter { margin-top: 0; width: auto; transform: none; }
+.roster .bar { height: 16px; border-width: 2.5px; }
+.roster .meter.stamina { height: 9px; border-width: 2px; }
+.roster .meter.special { height: 11px; border-width: 2px; }
+.roster .ico { width: 14px; font-size: 13px; }
+.roster .row.hp .ico { font-size: 15px; }
+.roster .card.out { opacity: 0.42; }
+.roster .card.out .nm { text-decoration: line-through; }
+.roster .card.offline { opacity: 0.7; }
+@media (max-width: 760px), (max-height: 500px) {
+  .roster { gap: 4px; padding-left: calc(env(safe-area-inset-left) + 8px); padding-right: calc(env(safe-area-inset-right) + 8px); }
+  .roster .card { padding: 2px 5px 4px; border-width: 2px; }
+  .roster .card.after-gap { margin-left: 40px; }
+  .cname { font-size: 14px; gap: 4px; margin-bottom: 1px; }
+  .cname .cdot { width: 9px; height: 9px; border-width: 2px; }
+  .cname .you { font-size: 9px; padding: 1px 3px; }
+  .roster .bar { height: 10px; border-width: 2px; }
+  .roster .meter.stamina { height: 6px; border-width: 1.5px; }
+  .roster .meter.special { height: 7px; border-width: 1.5px; }
+  .roster .row.st, .roster .row.sp { margin-top: 2px; }
+  .roster .ico { width: 10px; font-size: 9px; }
+}

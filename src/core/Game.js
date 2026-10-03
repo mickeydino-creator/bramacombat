@@ -223,7 +223,7 @@ export class Game {
     this.setFightCount(info.count);
     this.net = host ? new HostMatch(this, session, info) : new ClientMatch(this, session, info);
     this.controllers = host ? this.fighters.map((_, i) => (i === me.slot ? this.playerController : this.net.controllerFor(i))) : [];
-    this.configureRoster({ youIdx: me.slot, names: info.players.map((p) => `P${p.slot + 1}`), tags: true });
+    this.configureRoster({ youIdx: me.slot, names: info.players.map((p) => p.name), tags: true, shared: true });
     this.newMatch();
     this.menu.close();
     this.menu.setNetMode(true);
@@ -283,14 +283,20 @@ export class Game {
    * Which fighter the local player controls and how everybody is named. The HUD always shows YOU as its first
    * (big) entry; hudMap[fighterIndex] = position in the HUD.
    */
-  configureRoster({ youIdx = 0, names, tags = false }) {
+  configureRoster({ youIdx = 0, names, tags = false, shared = false }) {
     this.youIdx = youIdx;
     this.names = names;
-    const order = [youIdx, ...this.fighters.map((_, i) => i).filter((i) => i !== youIdx)];
-    this.hudMap = [];
-    order.forEach((fi, hi) => { this.hudMap[fi] = hi; });
     const css = (i) => `#${CHARACTERS[ROSTER[i]].appearance.colors.body.toString(16).padStart(6, '0')}`;
-    this.hud.configure(order.map((i) => this.label(i)), order.map(css));
+    if (shared) {
+      // Shared match: every player has a card (name, health, stamina, special) in room order - the same on every screen.
+      this.hudMap = this.fighters.map((_, i) => i);
+      this.hud.configureShared(names.map((name, i) => ({ name, color: css(i), you: i === youIdx })));
+    } else {
+      const order = [youIdx, ...this.fighters.map((_, i) => i).filter((i) => i !== youIdx)];
+      this.hudMap = [];
+      order.forEach((fi, hi) => { this.hudMap[fi] = hi; });
+      this.hud.configure(order.map((i) => this.label(i)), order.map(css));
+    }
     this.playerIndicator.fighter = this.you;
     this.playerIndicator.snap();
     this.nameTags.configure(tags ? this.fighters.map((f, i) => ({ fighter: f, label: names[i], color: css(i), show: i !== youIdx })) : []);
@@ -315,7 +321,7 @@ export class Game {
   onCue(name, ...a) {
     switch (name) {
       case 'msg': this.hud.showMessage(a[0]); break;
-      case 'result': this.hud.showMessage(a[0] < 0 ? 'DRAW' : a[0] === this.youIdx ? 'YOU WIN!' : `${this.names[a[0]]} WINS!`); break;
+      case 'result': this.hud.showMessage(a[0] < 0 ? 'DRAW' : a[0] === this.youIdx ? 'YOU WIN!' : `${this.names[a[0]].toUpperCase()} WINS!`); break;
       case 'fight': this.hud.showMessage('FIGHT!'); this.sfx.fight(); break; // once per round
       case 'round': this.sfx.bell(); this.sfx.say(a[0]); break;
       case 'ko': this.cam.shake(0.4, 0.4); this.sfx.ko(); if (!this.sfx.hasSample('ko')) this.sfx.say('K. O.'); break; // the recorded KNOCKOUT already says it
@@ -669,7 +675,7 @@ export class Game {
   finishVisuals(winnerIdx, quiet = false) {
     if (this.visual.finish) return;
     this.visual.finish = true;
-    this.hud.showWinner(winnerIdx === this.youIdx ? 'YOU WIN' : `${this.names[winnerIdx]} WINS`, true);
+    this.hud.showWinner(winnerIdx === this.youIdx ? 'YOU WIN' : `${this.names[winnerIdx].toUpperCase()} WINS`, true);
     if (quiet) return;
     if (winnerIdx === this.youIdx) { this.sfx.victory(); this.sfx.say('You win!'); }
     else { this.sfx.defeat(); if (!this.sfx.hasSample('defeat')) this.sfx.say('You lose'); }
@@ -817,6 +823,10 @@ export class Game {
     this.nameTags.update(this.phase !== 'menu' && this.phase !== 'podium' && this.phase !== 'over');
     this.debug.update(this.fighters);
     this.fighters.forEach((f, i) => {
+      if (this.hud.shared) { // the cards read the same synchronized fighter state on every screen
+        this.hudHealth(f);
+        this.hud.setCardState(this.hudMap[i], !f.alive || f.health <= 0, !!f.disconnected);
+      }
       this.hud.setStamina(this.hudMap[i], f.stamina, f.guardBroken);
       this.hud.setSpecial(this.hudMap[i], f.specials.status(), i === this.youIdx ? (this.touch ? 'STR' : 'L / Y') : '', f.hasStaminaForSpecial);
     });

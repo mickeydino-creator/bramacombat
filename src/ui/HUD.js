@@ -21,6 +21,7 @@ export class HUD {
         <div class="bar-wrap p2"><div class="name"><span class="nm"></span><span class="pips"><i></i><i></i></span></div><div class="row hp"><span class="ico">&#9829;</span><div class="bar"><div class="lag"></div><div class="fill"></div></div></div><div class="row st"><span class="ico">&#9889;&#xFE0E;</span><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div></div><div class="row sp"><span class="ico">&#9733;</span><div class="meter special"><div class="meter-fill"></div></div></div></div>
         <div class="opps">${[0, 1, 2].map(() => '<div class="opp"><div class="bar"><div class="lag"></div><div class="fill"></div></div><span class="onm"></span><i class="odot"></i></div>').join('')}</div>
       </div>
+      <div class="roster">${[0, 1, 2, 3].map(() => '<div class="card"><div class="cname"><i class="cdot"></i><span class="nm"></span><em class="you">YOU</em><span class="pips"><i></i><i></i></span><b class="cstate"></b></div><div class="row hp"><span class="ico">&#9829;</span><div class="bar"><div class="lag"></div><div class="fill"></div></div></div><div class="row st"><span class="ico">&#9889;&#xFE0E;</span><div class="meter stamina"><div class="meter-lag"></div><div class="meter-fill"></div></div></div><div class="row sp"><span class="ico">&#9733;</span><div class="meter special"><div class="meter-fill"></div></div></div></div>').join('')}</div>
       <div class="message"></div>
       <button type="button" class="pause-btn" aria-label="Pause">II</button>
       <button type="button" class="skip-btn" aria-label="Skip to the end of the fight">SKIP &#9654;&#9654;</button>
@@ -46,6 +47,23 @@ export class HUD {
       fill: row.querySelector('.fill'),
       lag: row.querySelector('.lag'),
     }));
+    // Shared match (VS FRIENDS): one card per human player, in room order, all driven by the same synchronized fighter state.
+    this.cards = [...el.querySelectorAll('.roster .card')].map((c) => ({
+      card: c,
+      name: c.querySelector('.nm'),
+      dot: c.querySelector('.cdot'),
+      you: c.querySelector('.you'),
+      state: c.querySelector('.cstate'),
+      pips: [...c.querySelectorAll('.pips i')],
+      fill: c.querySelector('.fill'),
+      lag: c.querySelector('.lag'),
+      meter: c.querySelector('.meter.stamina'),
+      meterFill: c.querySelector('.meter.stamina .meter-fill'),
+      meterLag: c.querySelector('.meter.stamina .meter-lag'),
+      special: c.querySelector('.meter.special'),
+      specialFill: c.querySelector('.meter.special .meter-fill'),
+    }));
+    this.shared = false;
     this.multi = false;
     this.message = el.querySelector('.message');
     this.overlay = el.querySelector('.overlay');
@@ -64,6 +82,7 @@ export class HUD {
    * Two fighters = the classic YOU / AI bars. More = YOU's full bars on the left, one slim health bar per opponent on the right.
    */
   configure(names, colors) {
+    this.useClassic();
     this.multi = names.length > 2;
     this.el.classList.toggle('multi', this.multi);
     this.setNames(names[0], names[1]);
@@ -77,9 +96,49 @@ export class HUD {
     });
   }
 
+  /**
+   * Shared-match layout: players[i] = { name, color, you } for every human in the match (room order). Each gets a card with name,
+   * health, stamina and special meter. Replaces the classic bars until configure() is called again.
+   */
+  configureShared(players) {
+    this.shared = true; this.multi = false;
+    this.el.classList.remove('multi');
+    this.el.classList.add('shared');
+    this.el.style.setProperty('--n', players.length);
+    const split = Math.ceil(players.length / 2); // the pause button sits between the two halves
+    this.cards.forEach((c, i) => {
+      const p = players[i];
+      c.card.style.display = p ? '' : 'none';
+      c.card.classList.toggle('after-gap', i === split && players.length > 1);
+      c.card.classList.remove('out', 'offline', 'you');
+      c.lastPct = undefined; c.lastSpecialPct = undefined;
+      if (!p) return;
+      c.name.textContent = p.name;
+      c.dot.style.background = p.color;
+      c.card.classList.toggle('you', !!p.you);
+      c.card.style.setProperty('--tint', p.color);
+      c.state.textContent = '';
+      c.pips.forEach((x) => x.classList.remove('on'));
+    });
+    this.el.classList.toggle('duel', players.length === 2);
+  }
+
+  /** Back to the classic YOU / AI bars. */
+  useClassic() { this.shared = false; this.el.classList.remove('shared', 'duel'); }
+
+  /** A player card shows OUT (knocked out / left) or ... (reconnecting) next to the name. */
+  setCardState(i, out, offline) {
+    const c = this.cards[i];
+    if (!c) return;
+    setClass(c.card, 'out', out);
+    setClass(c.card, 'offline', offline && !out);
+    const text = out ? 'OUT' : offline ? '...' : '';
+    if (c.state.textContent !== text) c.state.textContent = text;
+  }
+
   setHealth(i, value, max) {
     const pct = Math.max(0, (value / max) * 100);
-    const t = this.multi && i > 0 ? this.minis[i - 1] : this.bars[i];
+    const t = this.shared ? this.cards[i] : this.multi && i > 0 ? this.minis[i - 1] : this.bars[i];
     if (!t) return;
     setWidth(t.fill, pct);
     setWidth(t.lag, pct);
@@ -91,8 +150,8 @@ export class HUD {
    * `stamina` is the fighter's Stamina object - the bar always shows its real value.
    */
   setStamina(i, stamina, guardBroken = false) {
-    if (this.multi && i > 0) return; // opponents' meters are never shown
-    const b = this.bars[i];
+    if (this.multi && i > 0 && !this.shared) return; // opponents' meters are never shown
+    const b = this.shared ? this.cards[i] : this.bars[i];
     const pct = Math.max(0, Math.min(1, stamina.value / stamina.max)) * 100;
     setWidth(b.meterFill, pct);
     // White "spent" chunk: when stamina drops, it stays briefly then shrinks to the new value.
@@ -115,8 +174,8 @@ export class HUD {
    * and is read every frame, so the bar fills smoothly while recharging and empties instantly on use.
    */
   setSpecial(i, status, keyLabel = '', hasStamina = true) {
-    if (this.multi && i > 0) return;
-    const b = this.bars[i];
+    if (this.multi && i > 0 && !this.shared) return;
+    const b = this.shared ? this.cards[i] : this.bars[i];
     const pct = Math.max(0, Math.min(1, status.meter / status.capacity)) * 100;
     setWidth(b.specialFill, pct);
     if (b.lastSpecialPct !== undefined && pct < b.lastSpecialPct - 1) {
@@ -146,7 +205,7 @@ export class HUD {
   setVisible(v) { this.el.classList.toggle('hidden', !v); }
 
   /** Round wins as pips next to the names (best of 3: first to ROUNDS_TO_WIN). */
-  setWins(i, wins) { this.bars[i]?.pips.forEach((p, k) => p.classList.toggle('on', k < wins)); }
+  setWins(i, wins) { (this.shared ? this.cards : this.bars)[i]?.pips.forEach((p, k) => p.classList.toggle('on', k < wins)); }
 
   /** Only the host can start the next match of a shared game: others see a hint instead of RESTART. */
   setRestartVisible(v) { this.overlay.classList.toggle('no-restart', !v); }

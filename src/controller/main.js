@@ -31,20 +31,20 @@ root.innerHTML = `
     <h1 class="logo">DOODLE<span>BRAWL</span></h1>
     <p class="ctl-sub">PHONE CONTROLLER</p>
     <label class="field">ROOM CODE<input class="code-input" type="text" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD" aria-label="Room code"></label>
-    <label class="field">YOUR NAME<input class="name-input" type="text" maxlength="10" autocomplete="off" spellcheck="false" placeholder="PLAYER" aria-label="Your name"></label>
+    <label class="field">YOUR NAME<input class="name-input" type="text" maxlength="10" autocomplete="off" spellcheck="false" placeholder="Enter your name" aria-label="Your name" required></label>
     <p class="net-status" data-status></p>
     <button class="primary join-btn">JOIN</button>
   </section>
   <section class="ctl-screen" data-s="wait">
-    <div class="you-badge"><i class="mdot big"></i><div><div class="you-name">P2</div><div class="you-sub">your fighter</div></div></div>
+    <div class="you-badge"><i class="mdot big"></i><div><div class="you-name"></div><div class="you-sub">your fighter</div></div></div>
     <div class="room-label">ROOM <b class="room-code-small">----</b></div>
     <ul class="slots mini"></ul>
     <p class="net-status" data-status-wait>Waiting for the host to start the match...</p>
     <div class="ctl-buttons"><button class="ready-btn toggle on">READY!</button><button class="leave-btn">LEAVE</button></div>
   </section>
   <section class="ctl-screen" data-s="play">
-    <div class="play-head"><i class="mdot"></i><b class="play-name">P2</b><div class="hp"><div class="hp-fill"></div></div><span class="play-state"></span><button class="menu-btn" aria-label="Leave room">&times;</button></div>
-    <div class="ctl-center"><i class="mdot huge"></i><div class="ctl-me">P2</div><div class="ctl-hint">Hold the arrows to move. Tap to attack.</div></div>
+    <div class="play-head"><i class="mdot"></i><b class="play-name"></b><div class="hp"><div class="hp-fill"></div></div><span class="play-state"></span><button class="menu-btn" aria-label="Leave room">&times;</button></div>
+    <div class="ctl-center"><i class="mdot huge"></i><div class="ctl-me"></div><div class="ctl-hint">Hold the arrows to move. Tap to attack.</div></div>
     <div class="over-note">MATCH OVER<br><small>Waiting for the host...</small></div>
     <div class="leave-confirm"><p>Leave the room?</p><button class="primary yes">LEAVE</button><button class="no">STAY</button></div>
   </section>`;
@@ -75,7 +75,8 @@ const status = (text, tone = '') => { const el = $('[data-status]'); el.textCont
 async function join() {
   const code = normalizeCode(codeInput.value);
   if (!isValidCode(code)) { status(errorMessage('INVALID_CODE'), 'error'); return; }
-  const name = sanitizeName(nameInput.value, 'PHONE');
+  const name = sanitizeName(nameInput.value, '');
+  if (!name) { status(errorMessage('NAME_REQUIRED'), 'error'); nameInput.focus(); return; }
   try { localStorage.setItem(NAME_KEY, name); } catch { /* ignore */ }
   status(`Joining room ${code}...`, 'busy');
   $('.join-btn').disabled = true;
@@ -107,9 +108,10 @@ function paintBadge() {
   const slot = lobby?.members.find((m) => m.id === me.id)?.slot ?? me.slot;
   me.slot = slot;
   for (const dot of root.querySelectorAll('.you-badge .mdot, .play-head .mdot, .ctl-center .mdot')) dot.style.background = color(slot);
-  $('.you-name').textContent = `P${slot + 1}`;
-  $('.play-name').textContent = `P${slot + 1}`;
-  $('.ctl-me').textContent = `P${slot + 1}`;
+  const name = lobby?.members.find((m) => m.id === me.id)?.name ?? me.name ?? '';
+  $('.you-name').textContent = name;
+  $('.play-name').textContent = name;
+  $('.ctl-me').textContent = name;
 }
 
 function paintLobby() {
