@@ -54,6 +54,12 @@ Everything is table-driven in `src/config/modes.js` (fighters, arena width, spaw
 rounds to win, camera range) - add an entry there for another player count or arena size. Extra characters (colors) are in
 `src/config/characters.js`; AI targeting is `AIController.chooseTarget`; the arena resizes via `arena.setHalfWidth()`.
 
+## VS FRIENDS (phone controllers and online)
+
+PLAY -> VS FRIENDS offers **Phone Controllers** (friends use their phones as controllers for a match on this computer) and
+**Online Multiplayer** (room code / QR / share link, up to 4 players). Run with `npm run dev -- --host`, or `npm run build && npm start`
+for a deployment. Full details, env vars and limitations: [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md), `.env.example`.
+
 ## Match format
 
 Best of 3: the first fighter to win 2 rounds wins the match (`ROUNDS_TO_WIN` in `src/config/constants.js`), so a match has 2 or 3 rounds.
@@ -84,6 +90,7 @@ screen (RESTART / MAIN MENU) appears over the podium. Match flow lives in `src/c
 - `src/core/Game.js` - loop (fixed 60 steps/s), round flow (menu / intro / fight / pause / KO), hitstop, effects/sound hooks
 - `src/core/Settings.js` - saved settings (volumes, graphics)
 - `src/ui/Menu.js` - main menu, how to play, settings, pause
+- `src/net`, `src/ui/NetMenu.js`, `server/`, `shared/`, `controller.html` - VS FRIENDS networking, lobby, room server, phone controller
 - `src/camera`, `src/arena`, `src/ui`, `src/fx`, `src/audio` - camera, stage, HUD, hit sparks, generated sound effects (`src/audio/Sfx.js`)
 
 ## Characters

@@ -24,6 +24,9 @@ import { Settings } from './Settings.js';
 import { Menu } from '../ui/Menu.js';
 import { PlayerIndicator } from '../fx/PlayerIndicator.js';
 import { PALETTE } from '../style/sketch.js';
+import { NameTags } from '../fx/NameTags.js';
+import { HostMatch } from '../net/HostMatch.js';
+import { ClientMatch } from '../net/ClientMatch.js';
 
 const NEUTRAL = { move: 0, jump: false, actions: [] };
 
@@ -70,7 +73,12 @@ export class Game {
     this.p1 = this.allFighters[0];
     this.fighters = this.allFighters.slice(0, DEFAULT_FIGHTERS);
     this.shields = this.allFighters.map((f) => new BlockShield(this.scene, f));
-    this.playerIndicator = new PlayerIndicator(this.scene, this.p1); // player only, not the AI
+    this.playerIndicator = new PlayerIndicator(this.scene, this.p1); // marks the fighter YOU control (never the AI)
+    this.nameTags = new NameTags(this.scene); // "P2" tags over the other fighters (multiplayer only)
+    this.youIdx = 0; // which fighter the local player controls: always 0 against the AI, their own slot in a VS FRIENDS match
+    this.net = null; // HostMatch | ClientMatch while a VS FRIENDS match is running
+    this.session = null; // NetSession (room + lobby), see src/net/NetSession.js
+    this.visual = {}; // one-time presentation flags of the current round (podium shown, winner screen shown...)
     // Player 1 = keyboard + first gamepad, merged into one input.
     // Touch buttons are only added on touch devices.
     this.touch = isTouchDevice() ? new TouchController() : null;
@@ -82,19 +90,23 @@ export class Game {
     this.fightCount = 0;
     this.setFightCount(DEFAULT_FIGHTERS);
 
-    for (const f of this.allFighters) {
+    // Fighter events -> sound + effects. On the host they are also sent to the other screens (netEvent), which call
+    // fighter.emit() with the same event, so everybody sees and hears the same thing exactly once.
+    this.allFighters.forEach((f, idx) => {
       f.on('attackStart', (a) => {
         this.sfx.attack(a.name);
         if (a.name === 'strong') this.onSpecialActivate(f); // strong attack = the special
+        this.netEvent('atk', idx, a.name);
       });
-      f.on('jump', () => this.sfx.jump());
-      f.on('land', () => this.sfx.land());
+      f.on('jump', () => { this.sfx.jump(); this.netEvent('jmp', idx); });
+      f.on('land', () => { this.sfx.land(); this.netEvent('lnd', idx); });
       f.on('guardBreak', () => {
         this.sfx.guardBreak();
         this.effects.hitSpark(f.x + f.facing * 0.4, f.y + 1.2, 1.2, 0xff6b6b, 'CRACK!');
         this.cam.shake(0.15);
+        this.netEvent('gb', idx);
       });
-    }
+    });
 
     window.addEventListener('resize', () => {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -108,7 +120,8 @@ export class Game {
         e.stopImmediatePropagation(); // the menu that just opened must not also handle this Esc (= resume)
       }
       else if (e.code === 'Enter' && this.skipAvailable()) this.skipFight();
-      else if (e.code === 'KeyR' || (e.code === 'Enter' && this.phase === 'over')) this.startFight();
+      else if (!this.net && (e.code === 'KeyR' || (e.code === 'Enter' && this.phase === 'over'))) this.startFight(); // (R never restarts a shared match)
+      else if (this.net?.role === 'host' && this.phase === 'over' && e.code === 'Enter') this.startFight();
       if (e.code === 'KeyH') this.debug.toggle();
     });
 
@@ -166,30 +179,199 @@ export class Game {
 
   /** Show the main menu with the fighters idling in the background. */
   mainMenu() {
+    this.leaveNetwork();
     this.setFightCount(DEFAULT_FIGHTERS); // the menu always shows the classic duel arena
     this.newMatch();
     this.restart();
     this.phase = 'menu';
     this.hud.setVisible(false);
     this.touch?.setVisible(false);
-    this.hud.showMessage('');
+    this.msg('');
     this.menu.show('main', true);
     this.sfx.setMusicMode('menu');
   }
 
   /** START / RESTART: a fresh match. `count` = number of fighters (omitted: same as the last fight). */
   startFight(count) {
+    if (this.net) { if (this.net.role === 'host') this.net.requestRestart(); return; } // a shared match: only the host starts the next one
     if (['menu', 'paused', 'over', 'podium', 'roundend'].includes(this.phase)) this.hud.pageTurn();
     if (count) this.setFightCount(count);
     this.newMatch();
     this.menu.close();
-    this.controllers[0].getInput(this.p1, this.p2); // drop presses made while in menus
+    this.playerController.getInput(this.you, null); // drop presses made while in menus
     this.hud.setVisible(true);
     this.touch?.setVisible(true);
     this.sfx.setMusicMode('fight');
     this.restart();
-    this.sfx.bell();
-    this.sfx.say(this.mode.roundsToWin === 1 ? 'Free for all' : 'Round one');
+    this.cue('round', this.mode.roundsToWin === 1 ? 'Free for all' : 'Round one');
+  }
+
+  // ------------------------------------------------------------------ VS FRIENDS (network) matches
+
+  /**
+   * A shared match begins (or restarts): `info` is the server's `start` message with the final player list.
+   * The host runs the one simulation (remote players' controllers are NetControllers); everybody else mirrors it
+   * from snapshots (ClientMatch). 2 players = the 1v1 best-of-3, 3-4 players = free-for-all, like against the AI.
+   */
+  startNetMatch(session, info) {
+    const me = info.players.find((p) => p.id === session.you.id);
+    if (!me) return;
+    if (this.net) { this.net.dispose(); this.net = null; }
+    this.session = session;
+    const host = me.role === 'host';
+    this.fightCount = 0;
+    this.setFightCount(info.count);
+    this.net = host ? new HostMatch(this, session, info) : new ClientMatch(this, session, info);
+    this.controllers = host ? this.fighters.map((_, i) => (i === me.slot ? this.playerController : this.net.controllerFor(i))) : [];
+    this.configureRoster({ youIdx: me.slot, names: info.players.map((p) => `P${p.slot + 1}`), tags: true });
+    this.newMatch();
+    this.menu.close();
+    this.menu.setNetMode(true);
+    this.hud.setVisible(true);
+    this.hud.setRestartVisible(host);
+    this.touch?.setVisible(true);
+    this.sfx.setMusicMode('fight');
+    this.playerController.getInput(this.you, null); // drop presses made in the lobby
+    this.visual = {};
+    if (host) {
+      this.restart();
+      this.cue('round', this.mode.roundsToWin === 1 ? 'Free for all' : 'Round one');
+    } else {
+      this.phase = 'intro'; this.phaseFrame = 0; // the first snapshots set up the real state
+    }
+  }
+
+  /** Stop mirroring / hosting (the room itself is left with leaveNetwork). */
+  endNet() {
+    if (!this.net) return;
+    this.net.dispose();
+    this.net = null;
+    this.fightCount = 0; // makes the next setFightCount rebuild controllers, arena, HUD
+    this.menu?.setNetMode(false);
+    this.hud.setRestartVisible(true);
+    this.nameTags.configure([]);
+    this.hud.setBarsVisible(true);
+  }
+
+  /** The shared match ended without us leaving the room (the host reloaded): back to the menu scene, the lobby shows again. */
+  returnToLobby() {
+    this.endNet();
+    this.setFightCount(DEFAULT_FIGHTERS);
+    this.newMatch();
+    this.restart();
+    this.phase = 'menu';
+    this.hud.setVisible(false);
+    this.touch?.setVisible(false);
+    this.msg('');
+    this.sfx.setMusicMode('menu');
+    this.menu.show('lobby', true);
+  }
+
+  /** Leave the room (if any) and drop all network state. */
+  leaveNetwork() {
+    this.session?.leave();
+    this.session = null;
+    this.endNet();
+  }
+
+  /** Who the local player is, for text: YOU or the other fighter's name. */
+  label(i) { return i === this.youIdx ? 'YOU' : this.names[i]; }
+
+  get you() { return this.fighters[this.youIdx] ?? this.fighters[0]; }
+
+  /**
+   * Which fighter the local player controls and how everybody is named. The HUD always shows YOU as its first
+   * (big) entry; hudMap[fighterIndex] = position in the HUD.
+   */
+  configureRoster({ youIdx = 0, names, tags = false }) {
+    this.youIdx = youIdx;
+    this.names = names;
+    const order = [youIdx, ...this.fighters.map((_, i) => i).filter((i) => i !== youIdx)];
+    this.hudMap = [];
+    order.forEach((fi, hi) => { this.hudMap[fi] = hi; });
+    const css = (i) => `#${CHARACTERS[ROSTER[i]].appearance.colors.body.toString(16).padStart(6, '0')}`;
+    this.hud.configure(order.map((i) => this.label(i)), order.map(css));
+    this.playerIndicator.fighter = this.you;
+    this.playerIndicator.snap();
+    this.nameTags.configure(tags ? this.fighters.map((f, i) => ({ fighter: f, label: names[i], color: css(i), show: i !== youIdx })) : []);
+  }
+
+  hudHealth(f) { this.hud.setHealth(this.hudMap[this.fighters.indexOf(f)], f.health, f.maxHealth); }
+
+  // ------------------------------------------------------------------ one-shot presentation cues
+  // Everything that makes a sound or shows a message at a moment of the match goes through cue(): the host runs it
+  // and tells the other screens to run the same thing (see src/net/HostMatch.js); against the AI it simply runs here.
+
+  cue(name, ...args) {
+    this.onCue(name, ...args);
+    this.netEvent('c', name, ...args);
+  }
+
+  /** Host only: queue an event for the other screens. */
+  netEvent(...ev) { this.net?.emit?.(ev); }
+
+  msg(text) { this.cue('msg', text); }
+
+  onCue(name, ...a) {
+    switch (name) {
+      case 'msg': this.hud.showMessage(a[0]); break;
+      case 'result': this.hud.showMessage(a[0] < 0 ? 'DRAW' : a[0] === this.youIdx ? 'YOU WIN!' : `${this.names[a[0]]} WINS!`); break;
+      case 'fight': this.hud.showMessage('FIGHT!'); this.sfx.fight(); break; // once per round
+      case 'round': this.sfx.bell(); this.sfx.say(a[0]); break;
+      case 'ko': this.cam.shake(0.4, 0.4); this.sfx.ko(); if (!this.sfx.hasSample('ko')) this.sfx.say('K. O.'); break; // the recorded KNOCKOUT already says it
+      case 'out': this.cam.shake(0.25, 0.3); this.sfx.boom(); break; // free-for-all: one fighter is out, the fight goes on
+      case 'finishHim': this.sfx.finishHim(); break;
+      case 'wipe': this.hud.pageWipe(); this.sfx.pageFlip(); break;
+      case 'podium': this.podiumVisuals(); break;
+      case 'finish': this.finishVisuals(a[0], a[1]); break;
+      case 'fall': this.fallVisuals(a[0]); break;
+      default: break;
+    }
+  }
+
+  /** A hit/block landed: sparks, sounds, shake. Same code on the host and on every other screen. */
+  hitFeedback(attacker, defender, move, point, blocked) {
+    if (blocked) { // short freeze (host), blue spark, shield flash, no screen shake
+      this.effects.blockSparks(point.x, point.y);
+      this.shields[this.fighters.indexOf(defender)].flash();
+      this.sfx.block();
+      return;
+    }
+    const strength = move.damage / 10;
+    if (move.anim === 'strong') { // special landing: distinct impact
+      this.effects.specialImpact(point.x, point.y);
+      this.sfx.heavyHit();
+      this.sfx.specialHit();
+      this.cam.kick(0.7);
+    } else {
+      this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, 0xffd93b, !defender.alive);
+      this.sfx.hit(strength, move.anim);
+    }
+    if (defender === this.you) this.sfx.damage();
+    this.cam.shake(move.shake || 0.05 * strength);
+  }
+
+  /** Mirror screens: play a network event from the host. */
+  playNetEvent(ev) {
+    const [type, ...a] = ev;
+    switch (type) {
+      case 'atk': this.fighters[a[0]]?.emit('attackStart', { name: a[1] }); break;
+      case 'jmp': this.fighters[a[0]]?.emit('jump'); break;
+      case 'lnd': this.fighters[a[0]]?.emit('land'); break;
+      case 'gb': this.fighters[a[0]]?.emit('guardBreak'); break;
+      case 'hit': {
+        const [ai, di, action, blocked, px, py] = a;
+        const attacker = this.fighters[ai], defender = this.fighters[di];
+        if (!attacker || !defender) break;
+        const move = attacker.specials.has(action) ? attacker.specials.getMove(action) : attacker.def.moves[action];
+        defender.lastHitBlocked = !!blocked;
+        if (!blocked) defender.model.flash?.(); // (the host's takeHit does this itself)
+        this.hitFeedback(attacker, defender, move, { x: px, y: py }, !!blocked);
+        break;
+      }
+      case 'c': this.onCue(a[0], ...a.slice(1)); break;
+      default: break;
+    }
   }
 
   /**
@@ -211,16 +393,14 @@ export class Game {
     this.arena.setHalfWidth(mode.arenaHalfWidth);
     this.cam.maxZoom = mode.cameraMaxZoom;
     this.podiumScene.configure(mode.fighters);
-    this.names = fighterNames(mode.fighters);
-    const css = (key) => `#${CHARACTERS[key].appearance.colors.body.toString(16).padStart(6, '0')}`;
-    this.hud.configure(this.names, ROSTER.slice(0, mode.fighters).map(css));
+    this.configureRoster({ youIdx: 0, names: fighterNames(mode.fighters) }); // against the AI YOU are always fighter 0
     this.newMatch();
   }
 
   /** A match = rounds until somebody has won `mode.roundsToWin` of them (1v1: best of 3; free-for-all: one round, last one standing wins). */
   newMatch() {
     this.match = { wins: this.fighters.map(() => 0), round: 1 };
-    this.fighters.forEach((_, i) => this.hud.setWins(i, 0));
+    this.fighters.forEach((_, i) => this.hud.setWins(this.hudMap[i], 0));
   }
 
   roundLabel() {
@@ -251,6 +431,7 @@ export class Game {
   }
 
   pause() {
+    if (this.net) { this.menu.show('pause', true); return; } // a shared match can't be frozen: the menu just opens over it
     if (!['intro', 'fight', 'ko'].includes(this.phase)) return;
     this.pausedPhase = this.phase;
     this.phase = 'paused';
@@ -261,7 +442,7 @@ export class Game {
   resume() {
     if (this.phase !== 'paused') return;
     this.phase = this.pausedPhase;
-    this.controllers[0].getInput(this.p1, this.p2); // drop presses made while paused
+    this.playerController.getInput(this.you, null); // drop presses made while paused
     this.touch?.setVisible(true);
   }
 
@@ -277,6 +458,10 @@ export class Game {
     this.fallAnim = null;
     this.arena.focusShadows(false);
     for (const f of this.fighters) { this.setClip(f, null); f.model.root.visible = true; } // (the 4th place may have fallen through the page)
+    this.visual = {};
+    this.restartId = (this.restartId ?? 0) + 1; // lets mirror screens notice a new round even if they missed the event
+    this.podiumScene.setHole(0);
+    this.holeProgress = 0; this.fallIdx = -1;
     this.playerIndicator?.snap();
     this.controllers.forEach((c) => c.reset?.());
     this.phase = 'intro';
@@ -286,8 +471,8 @@ export class Game {
     this.finishHimDone = false;
     this.clearMessageAt = 0;
     this.hud.hideWinner();
-    this.hud.showMessage(this.roundLabel());
-    this.fighters.forEach((f, i) => this.hud.setHealth(i, f.health, f.maxHealth));
+    this.msg(this.roundLabel());
+    this.fighters.forEach((f) => this.hudHealth(f));
     const [camL, camR, camY] = this.camView();
     this.cam.update(camL, camR, STEP, true, camY);
   }
@@ -303,6 +488,7 @@ export class Game {
       this.acc += dt;
       while (this.acc >= STEP) {
         this.step();
+        this.net?.afterStep?.(); // host: send this step's snapshot
         this.acc -= STEP;
       }
       this.render(dt);
@@ -313,14 +499,15 @@ export class Game {
 
   /** One fixed gameplay frame (60/s). */
   step() {
+    if (this.net?.role === 'client') { this.stepClient(); return; }
     if (this.phase === 'menu' || this.phase === 'paused') return; // game frozen behind the menu
     if (this.skipRequested) { this.skipRequested = false; this.runSkip(); return; }
     this.phaseFrame++;
     if (this.phase === 'podium' || this.phase === 'over') { this.stepPodium(); return; }
 
     if (this.phase === 'intro') {
-      if (this.phaseFrame === Math.floor(INTRO_FRAMES * 0.55)) { this.hud.showMessage('FIGHT!'); this.sfx.fight(); } // once per round
-      if (this.phaseFrame >= INTRO_FRAMES) { this.phase = 'fight'; this.hud.showMessage(''); }
+      if (this.phaseFrame === Math.floor(INTRO_FRAMES * 0.55)) this.cue('fight'); // once per round
+      if (this.phaseFrame >= INTRO_FRAMES) { this.phase = 'fight'; this.msg(''); }
     }
 
     // Special meters recharge in real time (5 seconds), hitstop included.
@@ -331,19 +518,19 @@ export class Game {
 
     const fighting = this.phase === 'fight';
     // Player input is always polled so presses don't pile up between rounds.
-    const raw1 = this.controllers[0].getInput(this.p1, this.nearestEnemy(this.p1));
-    if (raw1.pause && this.phase !== 'over') { this.pause(); return; }
+    let raw1 = this.controllers[this.youIdx].getInput(this.you, this.nearestEnemy(this.you));
+    if (this.net) raw1 = this.net.localInput(raw1, this.menu.visible); // host: delayed like remote players' input is
+    if (raw1.pause && this.phase !== 'over') { this.pause(); if (!this.net) return; }
     if (raw1.restart && this.skipAvailable()) { this.skipFight(); return; } // gamepad A / Start
 
     // Every fighter gets its own input and its own target (the opponent it faces). AIs choose theirs in a free-for-all.
     const ffa = this.fightCount > 2;
-    const targets = this.fighters.map((f, i) => (ffa && i > 0 && fighting && f.alive
+    const targets = this.fighters.map((f, i) => (ffa && i !== this.youIdx && fighting && f.alive
       ? this.controllers[i].chooseTarget?.(f, this.fighters.filter((o) => o !== f)) ?? this.nearestEnemy(f)
       : this.nearestEnemy(f)));
     const inputs = this.fighters.map((f, i) => {
-      if (!fighting) return NEUTRAL;
-      if (i === 0) return raw1;
-      if (!f.alive) return NEUTRAL;
+      if (i === this.youIdx) return fighting ? raw1 : NEUTRAL;
+      if (!fighting || !f.alive) { this.controllers[i].drain?.(); return NEUTRAL; } // (a remote player's taps must not pile up between rounds)
       return this.controllers[i].getInput(f, targets[i], ffa ? this.fighters.filter((o) => o !== f && o !== targets[i]) : []);
     });
     this.fighters.forEach((f, i) => f.update(inputs[i], targets[i]));
@@ -353,7 +540,7 @@ export class Game {
       for (const hit of resolveHits(this.fighters)) this.onHit(hit);
     }
 
-    if (this.clearMessageAt && this.phaseFrame >= this.clearMessageAt && this.phase === 'fight') { this.hud.showMessage(''); this.clearMessageAt = 0; }
+    if (this.clearMessageAt && this.phaseFrame >= this.clearMessageAt && this.phase === 'fight') { this.msg(''); this.clearMessageAt = 0; }
 
     if (this.phase === 'ko') {
       if (this.phaseFrame === 40 && this.winner) this.winner.setVictory();
@@ -368,30 +555,29 @@ export class Game {
     const w = this.winner ? this.fighters.indexOf(this.winner) : -1;
     if (w >= 0) {
       this.match.wins[w]++;
-      this.hud.setWins(w, this.match.wins[w]);
+      this.hud.setWins(this.hudMap[w], this.match.wins[w]);
     }
     this.phaseFrame = 0;
     if (w >= 0 && this.match.wins[w] >= this.mode.roundsToWin) { // match decided: arena -> podium
       this.phase = 'podium';
       this.podiumStarted = false;
-      this.hud.showMessage('');
+      this.msg('');
       this.touch?.setVisible(false);
       return;
     }
     if (w >= 0) this.match.round++; // (a drawn round is replayed with the same number)
     this.phase = 'roundend';
-    this.hud.showMessage(w < 0 ? 'DRAW' : w === 0 ? 'YOU WIN!' : `${this.names[w]} WINS!`);
+    this.cue('result', w); // (each screen words it from its own point of view: YOU WIN! / P2 WINS!)
   }
 
   /** Between rounds: show the result for a moment, then a notebook page sweeps across and the next round starts behind it. */
   stepRoundEnd() {
     const f = this.phaseFrame;
-    if (f === ROUND_RESULT_FRAMES) { this.hud.pageWipe(); this.sfx.pageFlip(); }
+    if (f === ROUND_RESULT_FRAMES) this.cue('wipe');
     if (f === ROUND_RESULT_FRAMES + WIPE_COVER_FRAMES) {
-      this.controllers[0].getInput(this.p1, this.p2); // drop presses made during the transition
+      this.playerController.getInput(this.you, null); // drop presses made during the transition
       this.restart();
-      this.sfx.bell();
-      this.sfx.say(this.mode.roundsToWin === 1 ? 'Free for all' : this.roundLabel() === 'FINAL ROUND' ? 'Final round' : `Round ${['one', 'two', 'three'][this.match.round - 1] ?? this.match.round}`);
+      this.cue('round', this.mode.roundsToWin === 1 ? 'Free for all' : this.roundLabel() === 'FINAL ROUND' ? 'Final round' : `Round ${['one', 'two', 'three'][this.match.round - 1] ?? this.match.round}`);
     }
   }
 
@@ -401,7 +587,7 @@ export class Game {
    * hops to 2nd.
    */
   stepPodium() {
-    const raw1 = this.controllers[0].getInput(this.p1, this.p2);
+    const raw1 = this.playerController.getInput(this.you, null);
     if (this.phase === 'over') {
       if (raw1.restart) this.startFight();
       else if (raw1.back) this.mainMenu();
@@ -444,11 +630,11 @@ export class Game {
     const HOLE_AT = 45, OPEN = 18, DROP_AT = HOLE_AT + OPEN + 12;
     this.podiumScene.setHole(Math.min(1, Math.max(0, (n - HOLE_AT) / OPEN)));
     if (n === HOLE_AT) { f.state = 'startled'; f.attack = null; f.vy = 0; } // freezes and stares at the hole
+    this.holeProgress = Math.min(1, Math.max(0, (n - HOLE_AT) / OPEN));
     if (n === DROP_AT) {
-      this.setClip(f, this.floorClip); // only what is above the page stays visible: the body disappears into the hole
       f.state = 'plunge'; f.vy = -1.5; fall.yaw = f.yawOverride ?? 0;
-      this.effects.sprite('speedlines', { color: PALETTE.ink, width: 6 }, { x: f.x, y: f.y + 1.6, size: 1.5, life: 0.4, grow: 0.1, follow: f, oy: 1.7, rot: Math.PI / 2 });
-      this.sfx.fall();
+      this.cue('fall', this.fighters.indexOf(f));
+      this.fallIdx = this.fighters.indexOf(f);
     }
     if (n > DROP_AT && f.model.root.visible) {
       f.vy -= 16 * STEP;
@@ -458,8 +644,39 @@ export class Game {
     }
   }
 
-  /** SKIP is offered when YOU are out of a free-for-all and the AIs are still fighting. */
-  skipAvailable() { return this.fightCount > 2 && this.phase === 'fight' && !this.p1.alive; }
+  /** The faller sinks into the hole: only what is above the page stays visible. */
+  fallVisuals(idx) {
+    const f = this.fighters[idx];
+    if (!f || this.visual.fall) return;
+    this.visual.fall = true;
+    this.setClip(f, this.floorClip);
+    this.effects.sprite('speedlines', { color: PALETTE.ink, width: 6 }, { x: f.x, y: f.y + 1.6, size: 1.5, life: 0.4, grow: 0.1, follow: f, oy: 1.7, rot: Math.PI / 2 });
+    this.sfx.fall();
+  }
+
+  /** Arena -> podium: camera glide, tight shadows, the HUD bars fade out, page sound. */
+  podiumVisuals() {
+    if (this.visual.podium) return;
+    this.visual.podium = true;
+    const layout = podiumLayout(this.fightCount);
+    this.cam.setPodium(layout.camera);
+    this.arena.focusShadows(true); // tight shadow map around the podium: crisp shadows on the blocks
+    this.hud.setBarsVisible(false);
+    this.sfx.pageFlip();
+  }
+
+  /** The end screen over the podium. `quiet` = a screen that joined late: no jingle. */
+  finishVisuals(winnerIdx, quiet = false) {
+    if (this.visual.finish) return;
+    this.visual.finish = true;
+    this.hud.showWinner(winnerIdx === this.youIdx ? 'YOU WIN' : `${this.names[winnerIdx]} WINS`, true);
+    if (quiet) return;
+    if (winnerIdx === this.youIdx) { this.sfx.victory(); this.sfx.say('You win!'); }
+    else { this.sfx.defeat(); if (!this.sfx.hasSample('defeat')) this.sfx.say('You lose'); }
+  }
+
+  /** SKIP is offered when YOU are out of a free-for-all and the AIs are still fighting (never in a shared match). */
+  skipAvailable() { return !this.net && this.fightCount > 2 && this.phase === 'fight' && !this.you.alive; }
 
   skipFight() { if (this.skipAvailable()) this.skipRequested = true; }
 
@@ -502,10 +719,7 @@ export class Game {
       p.fighter.vx = 0;
       p.fighter.state = 'air'; // jump / fall pose while hopping onto the podium
     }
-    this.cam.setPodium(layout.camera);
-    this.arena.focusShadows(true); // tight shadow map around the podium: crisp shadows on the blocks
-    this.hud.setBarsVisible(false);
-    this.sfx.pageFlip();
+    this.cue('podium');
   }
 
   finishMatch() {
@@ -513,9 +727,7 @@ export class Game {
     this.phaseFrame = 0;
     // 4th place (4 fighters): a hole opens under them and they fall through the page
     this.fallAnim = this.fightCount === 4 ? { fighter: this.podiumMoves[3].fighter, frame: 0 } : null;
-    this.hud.showWinner(this.winner === this.p1 ? 'YOU WIN' : `${this.names[this.fighters.indexOf(this.winner)]} WINS`, true);
-    if (this.winner === this.p1) { this.sfx.victory(); this.sfx.say('You win!'); }
-    else { this.sfx.defeat(); if (!this.sfx.hasSample('defeat')) this.sfx.say('You lose'); }
+    this.cue('finish', this.fighters.indexOf(this.winner));
   }
 
   /** Special activation feedback - identical for YOU and AI (both fighters go through here). */
@@ -527,59 +739,68 @@ export class Game {
   }
 
   onHit({ attacker, defender, move, point }) {
-    if (defender.lastHitBlocked && defender.alive) {
-      // Blocked: short freeze, blue spark, shield flash, no screen shake.
-      this.hitstop = Math.max(this.hitstop, Math.ceil((move.hitstop || 0) / 2));
-      this.effects.blockSparks(point.x, point.y);
-      this.shields[this.fighters.indexOf(defender)].flash();
-      this.sfx.block();
-      this.hud.setHealth(this.fighters.indexOf(defender), defender.health, defender.maxHealth);
-      return;
-    }
-    const strength = move.damage / 10;
-    this.hitstop = Math.max(this.hitstop, move.hitstop || 0);
-    if (move.anim === 'strong') { // special landing: distinct impact
-      this.effects.specialImpact(point.x, point.y);
-      this.sfx.heavyHit();
-      this.sfx.specialHit();
-      this.cam.kick(0.7);
-    } else {
-      this.effects.hitSpark(point.x, point.y, 0.6 + strength * 0.5, 0xffd93b, !defender.alive);
-      this.sfx.hit(strength, move.anim);
-    }
-    if (defender === this.p1) this.sfx.damage();
-    this.cam.shake(move.shake || 0.05 * strength);
-    this.hud.setHealth(this.fighters.indexOf(defender), defender.health, defender.maxHealth);
+    const blocked = defender.lastHitBlocked && defender.alive;
+    // Game logic: a short freeze on impact (half as long when blocked).
+    this.hitstop = Math.max(this.hitstop, blocked ? Math.ceil((move.hitstop || 0) / 2) : move.hitstop || 0);
+    // Sparks, sounds, shake - here and on every mirror screen.
+    this.hitFeedback(attacker, defender, move, point, blocked);
+    this.netEvent('hit', this.fighters.indexOf(attacker), this.fighters.indexOf(defender), attacker.attack?.name ?? 'punch', blocked ? 1 : 0, Math.round(point.x * 100) / 100, Math.round(point.y * 100) / 100);
+    this.hudHealth(defender);
+    if (blocked) return;
 
-    // FINISH HIM! once per round, when a fighter first drops to 25% health or less.
+    // FINISH HIM! once per round, when a fighter first drops to 25% health or less (1v1 only).
     if (this.fightCount === 2 && defender.alive && !this.finishHimDone && defender.health <= defender.maxHealth * 0.25) {
       this.finishHimDone = true;
-      this.sfx.finishHim();
-      this.hud.showMessage('FINISH HIM!');
+      this.cue('finishHim');
+      this.msg('FINISH HIM!');
       this.clearMessageAt = this.phaseFrame + 90;
     }
 
-    if (!defender.alive) {
-      if (!this.downOrder.includes(defender)) this.downOrder.push(defender);
-      const alive = this.fighters.filter((f) => f.alive);
-      this.clearMessageAt = 0;
-      if (alive.length > 1) { // free-for-all: this fighter is out, the others keep fighting
-        this.hitstop = Math.max(this.hitstop, 10);
-        this.cam.shake(0.25, 0.3);
-        this.hud.showMessage('K.O.');
-        this.clearMessageAt = this.phaseFrame + 55;
-        this.sfx.boom();
-        return;
-      }
-      this.winner = alive[0] ?? null; // last one standing (nobody left = both knocked out together)
-      this.phase = 'ko';
-      this.phaseFrame = 0;
-      this.hitstop = 20;
-      this.cam.shake(0.4, 0.4);
-      this.hud.showMessage('K.O.');
-      this.sfx.ko();
-      if (!this.sfx.hasSample('ko')) this.sfx.say('K. O.'); // the recorded KNOCKOUT already says it
+    if (!defender.alive) this.knockout(defender);
+  }
+
+  /**
+   * A fighter is out (health 0). Free-for-all: the others fight on until one is left. Otherwise the round ends here:
+   * `winner` = the last one standing (nobody = both were knocked out together) and the K.O. phase starts.
+   * `forfeit` = the player left the match instead of being hit.
+   */
+  knockout(defender, { forfeit = false } = {}) {
+    if (!this.downOrder.includes(defender)) this.downOrder.push(defender);
+    if (this.phase === 'ko' || this.phase === 'roundend' || this.phase === 'podium' || this.phase === 'over') return; // the round is already decided
+    const alive = this.fighters.filter((f) => f.alive);
+    this.clearMessageAt = 0;
+    if (alive.length > 1) { // free-for-all: this fighter is out, the others keep fighting
+      this.hitstop = Math.max(this.hitstop, forfeit ? 0 : 10);
+      this.cue('out');
+      this.msg('K.O.');
+      this.clearMessageAt = this.phaseFrame + 55;
+      return;
     }
+    this.winner = alive[0] ?? null; // last one standing (nobody left = both knocked out together)
+    if (forfeit && this.winner && this.mode.roundsToWin > 1) this.match.wins[this.fighters.indexOf(this.winner)] = this.mode.roundsToWin - 1; // the opponent left: the match is theirs
+    this.phase = 'ko';
+    this.phaseFrame = 0;
+    this.hitstop = forfeit ? 0 : 20;
+    this.msg('K.O.');
+    this.cue('ko');
+  }
+
+  /** A remote player left the match for good (VS FRIENDS): their fighter is out. */
+  forfeit(fighter) {
+    if (!fighter?.alive) return;
+    fighter.health = 0;
+    fighter.attack = null;
+    fighter.setState('ko');
+    fighter.vx = 0; fighter.vy = 5;
+    this.hudHealth(fighter);
+    this.knockout(fighter, { forfeit: true });
+  }
+
+  /** Mirror screen (VS FRIENDS, not the host): no simulation here - send my input, play back the host's snapshots. */
+  stepClient() {
+    const raw = this.playerController.getInput(this.you, null);
+    this.net.sendInput(this.menu.visible ? NEUTRAL : raw);
+    this.net.consume();
   }
 
   render(dt) {
@@ -590,15 +811,16 @@ export class Game {
     this.effects.update(dt);
     this.arena.update(dt);
     this.shields.forEach((s) => s.update(dt));
-    this.playerIndicator.mesh.visible = this.phase !== 'menu' && this.p1.model.root.visible;
+    this.playerIndicator.mesh.visible = this.phase !== 'menu' && this.you.model.root.visible;
     this.hud.setSkipVisible(this.skipAvailable());
     this.playerIndicator.update(dt);
+    this.nameTags.update(this.phase !== 'menu' && this.phase !== 'podium' && this.phase !== 'over');
     this.debug.update(this.fighters);
     this.fighters.forEach((f, i) => {
-      this.hud.setStamina(i, f.stamina, f.guardBroken);
-      this.hud.setSpecial(i, f.specials.status(), i === 0 ? (this.touch ? 'STR' : 'L / Y') : '', f.hasStaminaForSpecial);
+      this.hud.setStamina(this.hudMap[i], f.stamina, f.guardBroken);
+      this.hud.setSpecial(this.hudMap[i], f.specials.status(), i === this.youIdx ? (this.touch ? 'STR' : 'L / Y') : '', f.hasStaminaForSpecial);
     });
-    this.touch?.setSpecialReady(this.p1.canUseSpecial('strong'));
+    this.touch?.setSpecialReady(this.you.canUseSpecial('strong'));
     this.renderer.render(this.scene, this.cam.camera);
   }
 }

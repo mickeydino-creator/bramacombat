@@ -24,7 +24,7 @@ export class HUD {
       <div class="message"></div>
       <button type="button" class="pause-btn" aria-label="Pause">II</button>
       <button type="button" class="skip-btn" aria-label="Skip to the end of the fight">SKIP &#9654;&#9654;</button>
-      <div class="overlay"><div class="banner"><div class="brand">DOODLE BRAWL</div><div class="winner"></div></div><div class="overlay-buttons"><button type="button" data-act="restart" class="primary">RESTART</button><button type="button" data-act="menu">MAIN MENU</button></div></div>`;
+      <div class="overlay"><div class="banner"><div class="brand">DOODLE BRAWL</div><div class="winner"></div></div><div class="overlay-buttons"><button type="button" data-act="restart" class="primary">RESTART</button><button type="button" data-act="menu">MAIN MENU</button></div><div class="waiting-host">Waiting for the host to start the next match...</div></div>`;
     document.body.appendChild(el);
     this.el = el;
     this.bars = ['.p1', '.p2'].map((s) => ({
@@ -147,6 +147,9 @@ export class HUD {
 
   /** Round wins as pips next to the names (best of 3: first to ROUNDS_TO_WIN). */
   setWins(i, wins) { this.bars[i]?.pips.forEach((p, k) => p.classList.toggle('on', k < wins)); }
+
+  /** Only the host can start the next match of a shared game: others see a hint instead of RESTART. */
+  setRestartVisible(v) { this.overlay.classList.toggle('no-restart', !v); }
 
   /** SKIP button: shown while YOU are knocked out and the others are still fighting. */
   setSkipVisible(v) { setClass(this.skipBtn, 'show', v); }

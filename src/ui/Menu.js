@@ -51,8 +51,7 @@ const HOW_TO_PLAY = `
  */
 export const GAME_MODES = [
   { id: 'ai', title: 'VS AI', desc: 'Fight the computer', available: true, go: 'fighters' }, // -> choose the number of fighters
-  { id: 'multiplayer', title: 'MULTIPLAYER', desc: 'Coming later', available: false },
-  { id: 'friends', title: 'VS FRIENDS', desc: 'Coming later', available: false },
+  { id: 'friends', title: 'VS FRIENDS', desc: 'Phone controllers or online', available: true, go: 'friends' }, // -> src/ui/NetMenu.js
 ];
 
 // Hand-drawn padlock (ink outline, uneven strokes)
@@ -75,6 +74,8 @@ export class Menu {
   constructor({ settings, sfx, gamepad, onStart, onResume, onRestart, onMainMenu }) {
     Object.assign(this, { settings, sfx, gamepad, onStart, onResume, onRestart, onMainMenu });
     this.stack = [];
+    this.extraActs = {}; // actions of screens added by other modules (VS FRIENDS: src/ui/NetMenu.js)
+    this.backHandlers = {}; // screen -> fn() that handles BACK itself (return true) instead of just closing the screen
     const el = document.createElement('div');
     el.className = 'menu-root';
     el.innerHTML = `
@@ -129,6 +130,7 @@ export class Menu {
       if (b.dataset.locked) this.locked(b);
       else if (b.dataset.go) this.show(b.dataset.go);
       else if (b.dataset.quality) this.settings.set('quality', b.dataset.quality);
+      else if (this.extraActs[b.dataset.act]) this.extraActs[b.dataset.act](b);
       else this.act(b.dataset.act, +b.dataset.count || undefined);
     });
     for (const input of el.querySelectorAll('input[type=range]')) {
@@ -172,7 +174,27 @@ export class Menu {
     this.render();
   }
 
+  /** Add a screen (HTML string with data-screen) and its button actions: used by VS FRIENDS. */
+  addScreens(html, acts = {}, backHandlers = {}) {
+    this.el.insertAdjacentHTML('beforeend', html);
+    Object.assign(this.extraActs, acts);
+    Object.assign(this.backHandlers, backHandlers);
+  }
+
+  /** During a shared VS FRIENDS match the game can't be paused: the pause menu just opens over it and only offers LEAVE. */
+  setNetMode(on) {
+    this.el.classList.toggle('net', on);
+    const b = this.el.querySelector('[data-screen=pause] [data-act=mainmenu]');
+    if (b) b.textContent = on ? 'LEAVE MATCH' : 'MAIN MENU';
+    const h = this.el.querySelector('[data-screen=pause] h2');
+    if (h) h.textContent = on ? 'MENU' : 'PAUSED';
+  }
+
+  /** Close the top screen without asking its back handler (it already did what it needed). */
+  pop() { if (this.stack.length > 1) this.stack.pop(); else this.stack = []; this.render(); }
+
   back() {
+    if (this.backHandlers[this.current]?.() === true) return;
     if (this.stack.length > 1) { this.stack.pop(); this.render(); }
     else if (this.current === 'pause') { this.close(); this.onResume(); }
   }
@@ -229,6 +251,16 @@ export class Menu {
   onKey(e) {
     if (!this.visible) return;
     const k = e.code;
+    const typing = document.activeElement?.tagName === 'INPUT' && document.activeElement.type === 'text';
+    if (typing) { // a text field (room code / name): letters belong to the field, only these keys navigate
+      if (k === 'ArrowUp') this.moveFocus(-1);
+      else if (k === 'ArrowDown') this.moveFocus(1);
+      else if (k === 'Enter') this.el.querySelector('.menu-screen.active .primary')?.click();
+      else if (k === 'Escape') this.back();
+      else return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      return;
+    }
     if (k === 'ArrowUp' || k === 'KeyW') this.moveFocus(-1);
     else if (k === 'ArrowDown' || k === 'KeyS') this.moveFocus(1);
     else if (k === 'ArrowLeft' || k === 'KeyA') this.adjust(-1);
